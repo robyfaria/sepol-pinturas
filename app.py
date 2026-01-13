@@ -179,8 +179,12 @@ else:
     with tab1:
         st.dataframe(df_sexta, use_container_width=True)
         if not df_sexta.empty:
-            selecionados = st.multiselect("Selecione pagamentos para marcar como PAGO", df_sexta["id"].tolist())
-            if st.button("Marcar selecionados como PAGO", type="primary"):
+            selecionados = st.multiselect(
+                "Selecione pagamentos (sexta) para marcar como PAGO",
+                df_sexta["id"].tolist(),
+                key="ms_pagar_sexta"
+            )
+            if st.button("Marcar selecionados como PAGO", type="primary", key="btn_pagar_sexta"):
                 for pid in selecionados:
                     exec_sql("select public.fn_marcar_pagamento_pago(%s, %s, %s);", (pid, usuario, data_pg))
                 st.success("Pagamentos marcados como PAGO!")
@@ -189,8 +193,12 @@ else:
     with tab2:
         st.dataframe(df_pend, use_container_width=True)
         if not df_pend.empty:
-            selecionados2 = st.multiselect("Selecione pagamentos para marcar como PAGO", df_pend["id"].tolist())
-            if st.button("Marcar pendentes selecionados como PAGO"):
+            selecionados2 = st.multiselect(
+                "Selecione pagamentos (pendentes) para marcar como PAGO",
+                df_pend["id"].tolist(),
+                key="ms_pagar_pendentes"
+            )
+            if st.button("Marcar pendentes selecionados como PAGO", key="btn_pagar_pendentes"):
                 for pid in selecionados2:
                     exec_sql("select public.fn_marcar_pagamento_pago(%s, %s, %s);", (pid, usuario, data_pg))
                 st.success("Pagamentos marcados como PAGO!")
