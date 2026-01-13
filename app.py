@@ -93,17 +93,26 @@ if menu == "Apontamentos":
         obs = st.text_input("Observação (opcional)", value="")
 
     if st.button("Salvar apontamento", type="primary"):
-        exec_sql(
-            """
-            insert into public.apontamentos
-              (obra_id, obra_fase_id, pessoa_id, data, tipo_dia, valor_base, desconto_valor, observacao)
-            values
-              (%s, %s, %s, %s, %s, %s, %s, %s);
-            """,
-            (obra_id, obra_fase_id, pessoa_id, data_ap, tipo_dia, valor_base, desconto, obs),
-        )
-        st.success("Apontamento salvo! (acréscimos e valor_final são calculados automaticamente)")
-        st.rerun()
+        # exec_sql(
+        #     """
+        #     insert into public.apontamentos
+        #       (obra_id, obra_fase_id, pessoa_id, data, tipo_dia, valor_base, desconto_valor, observacao)
+        #     values
+        #       (%s, %s, %s, %s, %s, %s, %s, %s);
+        #     """,
+        #     (obra_id, obra_fase_id, pessoa_id, data_ap, tipo_dia, valor_base, desconto, obs),
+        # )
+        # st.success("Apontamento salvo! (acréscimos e valor_final são calculados automaticamente)")
+        # st.rerun()
+        try:
+            exec_sql("""insert ...""", params)
+            st.success("Apontamento salvo! (acréscimos e valor_final são calculados automaticamente)")
+            st.rerun()
+        except psycopg2.errors.UniqueViolation:
+            st.warning("Já existe apontamento para essa pessoa nesse dia nessa obra. Se precisar corrigir, edite o registro.")
+        except Exception as e:
+            st.error("Erro ao salvar apontamento.")
+            st.exception(e)
 
     st.divider()
     st.subheader("Apontamentos recentes")
@@ -161,45 +170,50 @@ elif menu == "Gerar Pagamentos":
 # 3) Pagar
 # -----------------------------
 else:
-    st.subheader("Pagar (pendentes)")
-    usuario = st.text_input("Usuário (para auditoria)", value="admin")
+    st.subheader("Pagar (modo simples)")
+
+    usuario = st.text_input("Usuário", value="admin")
     data_pg = st.date_input("Data do pagamento", value=date.today())
 
-    # Views precisam existir (vamos avisar se não existirem)
-    try:
-        df_sexta = query_df("select * from public.pagamentos_para_sexta;")
-        df_pend = query_df("select * from public.pagamentos_pendentes;")
-    except Exception as e:
-        st.error("As views de pagamentos ainda não foram criadas no banco.")
-        st.exception(e)
-        st.stop()
+    # tenta carregar a view
+    df_sexta = query_df("select * from public.pagamentos_para_sexta;")
+    st.caption("Pagamentos para a próxima sexta")
 
-    tab1, tab2 = st.tabs(["Para a próxima sexta", "Todos pendentes"])
+    if df_sexta.empty:
+        st.info("Nada para pagar na próxima sexta.")
+    else:
+        for _, row in df_sexta.iterrows():
+            col1, col2, col3, col4 = st.columns([4, 2, 2, 2])
+            with col1:
+                st.write(f"**{row['pessoa_nome']}**  •  {row['tipo']}")
+            with col2:
+                st.write(f"R$ {float(row['valor_total']):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            with col3:
+                st.write(str(row.get("sexta", "")))
+            with col4:
+                if st.button("Pagar", key=f"pagar_{row['id']}", type="primary"):
+                    exec_sql("select public.fn_marcar_pagamento_pago(%s, %s, %s);", (int(row["id"]), usuario, data_pg))
+                    st.success(f"Pago! ({row['pessoa_nome']})")
+                    st.rerun()
 
-    with tab1:
-        st.dataframe(df_sexta, use_container_width=True)
-        if not df_sexta.empty:
-            selecionados = st.multiselect(
-                "Selecione pagamentos (sexta) para marcar como PAGO",
-                df_sexta["id"].tolist(),
-                key="ms_pagar_sexta"
-            )
-            if st.button("Marcar selecionados como PAGO", type="primary", key="btn_pagar_sexta"):
-                for pid in selecionados:
-                    exec_sql("select public.fn_marcar_pagamento_pago(%s, %s, %s);", (pid, usuario, data_pg))
-                st.success("Pagamentos marcados como PAGO!")
-                st.rerun()
+    st.divider()
+    st.caption("Extras pendentes (sábado/domingo)")
+    df_extra = query_df("select * from public.pagamentos_extras_pendentes;")
 
-    with tab2:
-        st.dataframe(df_pend, use_container_width=True)
-        if not df_pend.empty:
-            selecionados2 = st.multiselect(
-                "Selecione pagamentos (pendentes) para marcar como PAGO",
-                df_pend["id"].tolist(),
-                key="ms_pagar_pendentes"
-            )
-            if st.button("Marcar pendentes selecionados como PAGO", key="btn_pagar_pendentes"):
-                for pid in selecionados2:
-                    exec_sql("select public.fn_marcar_pagamento_pago(%s, %s, %s);", (pid, usuario, data_pg))
-                st.success("Pagamentos marcados como PAGO!")
-                st.rerun()
+    if df_extra.empty:
+        st.info("Sem extras pendentes.")
+    else:
+        for _, row in df_extra.iterrows():
+            col1, col2, col3, col4 = st.columns([4, 2, 2, 2])
+            with col1:
+                st.write(f"**{row['pessoa_nome']}**  •  EXTRA")
+            with col2:
+                st.write(f"R$ {float(row['valor_total']):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            with col3:
+                st.write(str(row.get("data_extra", "")))
+            with col4:
+                if st.button("Pagar", key=f"pagar_extra_{row['id']}", type="primary"):
+                    exec_sql("select public.fn_marcar_pagamento_pago(%s, %s, %s);", (int(row["id"]), usuario, data_pg))
+                    st.success(f"Pago extra! ({row['pessoa_nome']})")
+                    st.rerun()
+
