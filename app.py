@@ -93,19 +93,16 @@ if menu == "Apontamentos":
         obs = st.text_input("Observação (opcional)", value="")
 
     if st.button("Salvar apontamento", type="primary"):
-        # exec_sql(
-        #     """
-        #     insert into public.apontamentos
-        #       (obra_id, obra_fase_id, pessoa_id, data, tipo_dia, valor_base, desconto_valor, observacao)
-        #     values
-        #       (%s, %s, %s, %s, %s, %s, %s, %s);
-        #     """,
-        #     (obra_id, obra_fase_id, pessoa_id, data_ap, tipo_dia, valor_base, desconto, obs),
-        # )
-        # st.success("Apontamento salvo! (acréscimos e valor_final são calculados automaticamente)")
-        # st.rerun()
         try:
-            exec_sql("""insert ...""", params)
+            exec_sql(
+                """
+                insert into public.apontamentos
+                  (obra_id, obra_fase_id, pessoa_id, data, tipo_dia, valor_base, desconto_valor, observacao)
+                values
+                  (%s, %s, %s, %s, %s, %s, %s, %s);
+                """,
+                (obra_id, obra_fase_id, pessoa_id, data_ap, tipo_dia, valor_base, desconto, obs),
+            )
             st.success("Apontamento salvo! (acréscimos e valor_final são calculados automaticamente)")
             st.rerun()
         except psycopg2.errors.UniqueViolation:
