@@ -5,7 +5,32 @@ from psycopg2.extras import RealDictCursor
 from datetime import date, timedelta
 import socket
 
-st.set_page_config(page_title="SEPOL - Teste DB", layout="wide")
+
+st.set_page_config(page_title="Teste DB Pooler", layout="wide")
+st.title("Teste Supabase via Pooler")
+
+url = st.secrets["DATABASE_URL"]
+
+# Debug DNS do host do pooler
+host = "aws-1-sa-east-1.pooler.supabase.com"
+try:
+    ip = socket.gethostbyname(host)
+    st.success(f"DNS OK: {host} -> {ip}")
+except Exception as e:
+    st.error("DNS falhou no Streamlit Cloud para o host do pooler.")
+    st.exception(e)
+    st.stop()
+
+try:
+    conn = psycopg2.connect(url, cursor_factory=RealDictCursor, connect_timeout=10)
+    with conn.cursor() as cur:
+        cur.execute("select now() as agora;")
+        st.success("Conexão OK ✅")
+        st.write(cur.fetchone())
+except Exception as e:
+    st.error("Falha ao conectar via pooler.")
+    st.exception(e)
+    st.stop()
 
 # -----------------------------
 # DB Helpers
