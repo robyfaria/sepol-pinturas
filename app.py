@@ -32,39 +32,6 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
-# -----------------------------
-# DB Helpers
-# -----------------------------
-@st.cache_resource
-def get_conn():
-    url = st.secrets["DATABASE_URL"]
-    return psycopg2.connect(url, cursor_factory=RealDictCursor, connect_timeout=10)
-
-st.title("Teste de conexão Supabase")
-
-# Debug 1: DNS resolve?
-host = "db.liwsnxcajoglokxfvqld.supabase.co"
-try:
-    ip = socket.gethostbyname(host)
-    st.success(f"DNS OK: {host} -> {ip}")
-except Exception as e:
-    st.error("DNS falhou no Streamlit Cloud (não conseguiu resolver o host).")
-    st.exception(e)
-    st.stop()
-
-# Debug 2: conecta e faz SELECT now()
-try:
-    conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute("select now() as agora;")
-        row = cur.fetchone()
-    st.success("Conexão OK ✅")
-    st.write(row)
-except Exception as e:
-    st.error("Falha ao conectar no Postgres.")
-    st.exception(e)
-    st.stop()
-
 def query_df(sql, params=None):
     conn = get_conn()
     with conn.cursor() as cur:
