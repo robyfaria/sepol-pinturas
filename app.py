@@ -11,14 +11,21 @@ st.set_page_config(page_title="SEPOL - Obras", layout="wide")
 # -----------------------------
 @st.cache_resource
 def get_conn():
-    return psycopg2.connect(
-        host=st.secrets["DB_HOST"],
-        port=st.secrets["DB_PORT"],
-        dbname=st.secrets["DB_NAME"],
-        user=st.secrets["DB_USER"],
-        password=st.secrets["DB_PASSWORD"],
-        cursor_factory=RealDictCursor,
-    )
+    try:
+        return psycopg2.connect(
+            host=st.secrets["DB_HOST"],
+            port=int(st.secrets.get("DB_PORT", 5432)),
+            dbname=st.secrets.get("DB_NAME", "postgres"),
+            user=st.secrets["DB_USER"],
+            password=st.secrets["DB_PASSWORD"],
+            sslmode=st.secrets.get("DB_SSLMODE", "require"),
+            connect_timeout=10,
+            cursor_factory=RealDictCursor,
+        )
+    except Exception as e:
+        st.error("Falha ao conectar no banco. Verifique DB_HOST/DB_PORT/DB_USER/DB_PASSWORD e SSL.")
+        st.exception(e)
+        raise
 
 def query_df(sql, params=None):
     conn = get_conn()
