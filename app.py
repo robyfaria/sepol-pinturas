@@ -370,14 +370,29 @@ if menu == "CLIENTES":
 
             end = st.text_input("Endereço (opcional)")
 
-            # Mostra sempre (porque em form não re-renderiza condicional)
-            ids = df_ind_ativos["id"].tolist()
+            if df_ind_ativos.empty:
+                st.warning("Não existe nenhuma Indicação ativa cadastrada ainda.")
+                ids = []
+            else:
+                # garante colunas
+                if "id" not in df_ind_ativos.columns:
+                    st.error(f"Erro: coluna 'id' não veio na consulta. Colunas disponíveis: {list(df_ind_ativos.columns)}")
+                    st.stop()
+                # Mostra sempre (porque em form não re-renderiza condicional)
+                ids = df_ind_ativos["id"].astype(int).tolist()                
+            
             opcoes = [None] + ids
-            indicacao_id = st.selectbox(
-                "Quem indicou (apenas se Origem = INDICADO)",
-                opcoes,
-                format_func=lambda x: "—" if x is None else indic_fmt(x),
-            )
+
+            indicacao_id = None
+            if ids:
+                indicacao_id = st.selectbox(
+                    "Quem indicou (apenas se Origem = INDICADO)",
+                    opcoes,
+                    format_func=lambda x: "—" if x is None else indic_fmt(x),
+                    key="edit_cli_indicacao_id",
+                )
+            else:
+                st.info("Cadastre uma Indicação em Cadastros → Indicações (ou use Cliente Próprio).")
             
             salvar = st.form_submit_button("Salvar cliente", type="primary", use_container_width=True)
             if salvar:
@@ -557,15 +572,30 @@ if menu == "OBRAS":
                 ind_tipo = st.selectbox("Tipo da indicação", ["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"], index=0)
             with cc3:
                 ind_tel = st.text_input("Telefone indicação (opcional)")
-    
-            # Selecionar indicação existente — sempre visível
-            ids = df_ind_ativos["id"].tolist()
+
+            if df_ind_ativos.empty:
+                st.warning("Não existe nenhuma Indicação ativa cadastrada ainda.")
+                ids = []
+            else:
+                # garante colunas
+                if "id" not in df_ind_ativos.columns:
+                    st.error(f"Erro: coluna 'id' não veio na consulta. Colunas disponíveis: {list(df_ind_ativos.columns)}")
+                    st.stop()
+                # Mostra sempre (porque em form não re-renderiza condicional)
+                ids = df_ind_ativos["id"].astype(int).tolist()          
+
             opcoes = [None] + ids
-            indicacao_id = st.selectbox(
-                "Ou selecione indicação existente",
-                opcoes,
-                format_func=lambda x: "—" if x is None else ind_fmt(x),
-            )
+
+            indicacao_id = None
+            if ids:
+                indicacao_id = st.selectbox(
+                    "Quem indicou (apenas se Origem = INDICADO)",
+                    opcoes,
+                    format_func=lambda x: "—" if x is None else indic_fmt(x),
+                    key="obra_cli_indicacao_id",
+                )
+            else:
+                st.info("Cadastre uma Indicação em Cadastros → Indicações (ou use Cliente Próprio).")
     
             criar = st.form_submit_button("Criar cliente", type="primary", use_container_width=True)
     
