@@ -23,16 +23,24 @@ def get_conn():
 
 def query_df(sql, params=None):
     conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute(sql, params or ())
-        rows = cur.fetchall()
-    return pd.DataFrame(rows)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+            rows = cur.fetchall()
+        return pd.DataFrame(rows)
+    except Exception:
+        conn.rollback()
+        raise
 
 def exec_sql(sql, params=None):
     conn = get_conn()
-    with conn.cursor() as cur:
-        cur.execute(sql, params or ())
-    conn.commit()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 def brl(v):
     try:
@@ -155,7 +163,7 @@ if menu == "HOJE":
             st.rerun()
 
     with colW:
-        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (sábado/domingo)")
+        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (Sáb/Dom)")
         if qtd_extras == 0:
             st.success("Sem extras pendentes.")
         else:
