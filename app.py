@@ -18,13 +18,13 @@ import os
 # st.set_page_config("DEV SEPOL - Controle de Obras", layout="wide")
 st.set_page_config(page_title="DEV SEPOL - Pinturas", layout="wide")
 
-col_title, col_logo = st.columns([6,1,1])
+col_title, col_logo = st.columns([6,1])
 
 with col_title:
     st.markdown("## 🏗️ SEPOL - Controle de Obras")
 
 with col_logo:
-    st.image("assets/sepol_logo.png", width=120)
+    st.image("assets/sepol_logo.png", use_container_width=True) # width=120)
 
 # ======================================================
 # DB
