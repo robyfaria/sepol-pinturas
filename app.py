@@ -104,10 +104,10 @@ if not st.session_state["usuario"]:
 with st.sidebar:
     st.markdown(f"👤 {st.session_state['usuario']}")
     
-    MENU_OPTS = ["HOME", "PROFISSIONAIS", "CLIENTES", "SERVIÇOS", "OBRAS", "APONTAMENTOS", "FINANCEIRO"]
+    MENU_OPTS = ["HOJE", "PROFISSIONAIS", "CLIENTES", "SERVIÇOS", "OBRAS", "APONTAMENTOS", "FINANCEIRO"]
     
     if "menu" not in st.session_state:
-        st.session_state["menu"] = "HOME"
+        st.session_state["menu"] = "HOJE"
     if "menu_widget" not in st.session_state:
         st.session_state["menu_widget"] = st.session_state["menu"]
     
@@ -366,11 +366,6 @@ if menu == "CLIENTES":
     # opções de indicação ativas para cliente indicado
     df_ind_ativos = safe_df("select id, nome from public.indicacoes where ativo=true order by nome;")
 
-    def indic_fmt(x):
-        if df_ind_ativos.empty:
-            return str(x)
-        return df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0]
-
     if edit_cli_id is None:
         with st.form("form_cli_novo", clear_on_submit=True):
             c1, c2, c3 = st.columns([4, 2, 2])
@@ -394,15 +389,15 @@ if menu == "CLIENTES":
                 # Mostra sempre (porque em form não re-renderiza condicional)
                 ids = df_ind_ativos["id"].astype(int).tolist()                
             
-            opcoes = [None] + ids
-
             indicacao_id = None
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Clientes - Apenas se Origem = INDICADO)",
-                    opcoes,
-                    format_func=lambda x: "—" if x is None else indic_fmt(x),
-                    key="edit_cli_indicacao_id"
+                    options=[None] + ids,
+                    index=0,
+                    format_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
+                    key="edit_cli_indicacao_id",
+                    disabled=(len(ids)==0),
                 )
             else:
                 st.info("Cadastre uma Indicação em Cadastros → Indicações (ou use Cliente Próprio).")
@@ -453,8 +448,6 @@ if menu == "CLIENTES":
             end = st.text_input("Endereço (opcional)", value=r["endereco"] or "", key="cli_end_edit")
             
             ids = df_ind_ativos["id"].tolist()
-            opcoes = [None] + ids
-            
             default_sel = None
             if pd.notna(r["indicacao_id"]):
                 default_sel = int(r["indicacao_id"])
@@ -464,10 +457,11 @@ if menu == "CLIENTES":
             
             indicacao_id = st.selectbox(
                 "Quem indicou? (Obras - Apenas se Origem = INDICADO)",
-                opcoes,
+                options=[None] + ids,
                 index=idx,
-                format_func=lambda x: "—" if x is None else indic_fmt(x),
+                format_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
                 key="cli_ind_edit_any"
+                disabled=(len(ids)==0),
             )
 
             b1, b2 = st.columns(2)
@@ -670,11 +664,6 @@ if menu == "OBRAS":
     df_cli_ativos = safe_df("select id, nome from public.clientes where ativo=true order by nome;")
     df_ind_ativos = safe_df("select id, nome from public.indicacoes where ativo=true order by nome;")
 
-    def ind_fmt(x):
-        if df_ind_ativos.empty:
-            return str(x)
-        return df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0]
-
     # -------------------------
     # Cliente rápido (com origem + indicação + indicação rápida inline)
     # -------------------------
@@ -710,18 +699,19 @@ if menu == "OBRAS":
                     st.error(f"Erro: coluna 'id' não veio na consulta. Colunas disponíveis: {list(df_ind_ativos.columns)}")
                     st.stop()
                 # Mostra sempre (porque em form não re-renderiza condicional)
-                ids = df_ind_ativos["id"].astype(int).tolist()          
-
-            opcoes = [None] + ids
+                ids = df_ind_ativos["id"].astype(int).tolist()     
 
             indicacao_id = None
             if ids:
                 indicacao_id = st.selectbox(
-                    "Quem indicou (apenas se Origem = INDICADO)",
-                    opcoes,
-                    format_func=lambda x: "—" if x is None else indic_fmt(x),
-                    key="obra_cli_indicacao_id"
+                    "Quem indicou? (Cliente Rápido - Apenas se Origem = INDICADO)",
+                    options=[None] + ids,
+                    index=0,
+                    fomart_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
+                    key="obra_cli_indicacao_id",
+                    disabled=(len(ids)==0),
                 )
+
             else:
                 st.info("Cadastre uma Indicação em Cadastros → Indicações (ou use Cliente Próprio).")
     
