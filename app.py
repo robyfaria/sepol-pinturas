@@ -399,7 +399,7 @@ if menu == "CLIENTES":
             indicacao_id = None
             if ids:
                 indicacao_id = st.selectbox(
-                    "Quem indicou (apenas se Origem = INDICADO)",
+                    "Quem indicou? (Clientes - Apenas se Origem = INDICADO)",
                     opcoes,
                     format_func=lambda x: "—" if x is None else indic_fmt(x),
                     key="edit_cli_indicacao_id"
@@ -463,7 +463,7 @@ if menu == "CLIENTES":
             idx = opcoes.index(default_sel) if default_sel in opcoes else 0
             
             indicacao_id = st.selectbox(
-                "Quem indicou (apenas se Origem = INDICADO)",
+                "Quem indicou? (Obras - Apenas se Origem = INDICADO)",
                 opcoes,
                 index=idx,
                 format_func=lambda x: "—" if x is None else indic_fmt(x),
