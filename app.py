@@ -747,12 +747,13 @@ if menu == "OBRAS":
                 # Mostra sempre (porque em form não re-renderiza condicional)   
                 ids = [int(x) for x in df_ind_ativos["id"].tolist()]
 
+            map_ind = dict(zip(df_ind_ativos["id"], df_ind_ativos["nome"]))
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Cliente Rápido - Apenas se Origem = INDICADO)",
                     options=[None] + ids,  # sempre lista python
                     index=0,
-                    fomart_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
+                    format_func=lambda x: "—" if x is None else map_ind.get(int(x), f"ID {x}")
                     key="obra_cli_indicacao_id",
                     disabled=(len(ids)==0),
                 )
