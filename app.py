@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import date
+from datetime import date, timedelta
 
 # ======================================================
 # CONFIG
@@ -89,7 +89,7 @@ with st.sidebar:
     st.markdown(f"👤 {st.session_state['usuario']}")
     st.selectbox(
         "Menu",
-        ["PROFISSIONAIS", "CLIENTES", "OBRAS"],
+        ["HOJE", "PROFISSIONAIS", "CLIENTES", "OBRAS", "APONTAMENTOS", "FINANCEIRO"],
         key="menu",
     )
     if st.button("Sair"):
@@ -204,7 +204,7 @@ if menu == "PROFISSIONAIS":
             with colC:
                 b1, b2 = st.columns(2)  # lado a lado
                 with b1:
-                    if st.button("Editar", key=f"p_edit_{int(rr['id'])}", use_container_width=True):
+                    if st.button("EDITAR ✏️", key=f"p_edit_{int(rr['id'])}", use_container_width=True):
                         st.session_state["edit_prof"] = int(rr["id"])
                         st.rerun()
                 with b2:
@@ -314,7 +314,7 @@ if menu == "CLIENTES":
             with colC:
                 b1, b2 = st.columns(2)
                 with b1:
-                    if st.button("Editar", key=f"ind_edit_{int(rr['id'])}", use_container_width=True):
+                    if st.button("EDITAR ✏️", key=f"ind_edit_{int(rr['id'])}", use_container_width=True):
                         st.session_state["edit_ind"] = int(rr["id"])
                         st.rerun()
                 with b2:
@@ -487,7 +487,7 @@ if menu == "CLIENTES":
             with colC:
                 b1, b2 = st.columns(2)
                 with b1:
-                    if st.button("Editar", key=f"cli_edit_{int(rr['id'])}", use_container_width=True):
+                    if st.button("EDITAR ✏️", key=f"cli_edit_{int(rr['id'])}", use_container_width=True):
                         st.session_state["edit_cliente"] = int(rr["id"])
                         st.rerun()
                 with b2:
@@ -710,7 +710,7 @@ if menu == "OBRAS":
             with colC:
                 b1, b2 = st.columns(2)
                 with b1:
-                    if st.button("Editar", key=f"obra_edit_{int(rr['id'])}", use_container_width=True):
+                    if st.button("EDITAR ✏️", key=f"obra_edit_{int(rr['id'])}", use_container_width=True):
                         st.session_state["edit_obra"] = int(rr["id"])
                         st.rerun()
                 with b2:
@@ -722,3 +722,354 @@ if menu == "OBRAS":
                         if st.button("ATIVAR ✅", key=f"obra_at_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.obras set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
+# ======================================================
+# SEPOL - V1.2 Novas funcionalidades estáveis
+# ======================================================
+# ======================================================
+# HOJE (60+ operacional)
+# ======================================================
+if menu == "HOJE":
+    st.subheader("📅 HOJE")
+
+    # KPIs (usa view do seu SQL V1)
+    kpi = safe_df("select * from public.home_hoje_kpis;")
+    if not kpi.empty:
+        r = kpi.iloc[0]
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Hoje", str(r["hoje"]))
+        c2.metric("Sexta-alvo", str(r["sexta"]))
+        c3.metric("Fases em andamento", int(r["fases_em_andamento"]))
+        c4.metric("Recebimentos vencidos", int(r["recebimentos_vencidos_qtd"]))
+        c5.metric("A receber (total)", brl(r["recebimentos_pendentes_total"]))
+
+        c6, c7 = st.columns(2)
+        c6.metric("Pagar na sexta (total)", brl(r["pagar_na_sexta_total"]))
+        c7.metric("Extras pendentes (total)", brl(r["extras_pendentes_total"]))
+    else:
+        st.info("Sem dados ainda.")
+
+    st.divider()
+    st.markdown("### Ações rápidas")
+    a1, a2, a3 = st.columns(3)
+    with a1:
+        if st.button("Ir para Apontamentos", type="primary", use_container_width=True):
+            st.session_state["menu"] = "APONTAMENTOS"
+            st.rerun()
+    with a2:
+        if st.button("Ir para Financeiro", use_container_width=True):
+            st.session_state["menu"] = "FINANCEIRO"
+            st.rerun()
+    with a3:
+        if st.button("Ir para Obras", use_container_width=True):
+            st.session_state["menu"] = "OBRAS"
+            st.rerun()
+
+# ======================================================
+# APONTAMENTOS (estável + trava se pago)
+# ======================================================
+if menu == "APONTAMENTOS":
+    st.subheader("📝 Apontamentos")
+    st.caption("Regra: 1 apontamento por pessoa, por dia, por obra. Se errou, edite (se não estiver pago).")
+
+    if "edit_ap" not in st.session_state:
+        st.session_state["edit_ap"] = None
+
+    df_pessoas = safe_df("select id,nome from public.pessoas where ativo=true order by nome;")
+    df_obras = safe_df("select id,titulo from public.obras where ativo=true order by titulo;")
+
+    if df_pessoas.empty or df_obras.empty:
+        st.warning("Cadastre profissionais e obras primeiro.")
+        st.stop()
+
+    pessoa_ids = df_pessoas["id"].tolist()
+    obra_ids = df_obras["id"].tolist()
+
+    edit_id = st.session_state["edit_ap"]
+
+    # ---------- NOVO ----------
+    if edit_id is None:
+        with st.form("form_ap_novo", clear_on_submit=True):
+            c1, c2, c3 = st.columns([4, 4, 2])
+            with c1:
+                obra_id = st.selectbox(
+                    "Obra",
+                    obra_ids,
+                    format_func=lambda x: df_obras.loc[df_obras["id"] == x, "titulo"].iloc[0],
+                )
+            with c2:
+                pessoa_id = st.selectbox(
+                    "Profissional",
+                    pessoa_ids,
+                    format_func=lambda x: df_pessoas.loc[df_pessoas["id"] == x, "nome"].iloc[0],
+                )
+            with c3:
+                data_ap = st.date_input("Data", value=date.today())
+
+            c4, c5, c6, c7 = st.columns([2, 2, 2, 4])
+            with c4:
+                tipo_dia = st.selectbox("Tipo do dia", ["NORMAL", "FERIADO", "SABADO", "DOMINGO"], index=0)
+            with c5:
+                valor_base = st.number_input("Valor base (R$)", min_value=0.0, step=50.0, value=0.0)
+            with c6:
+                desconto = st.number_input("Desconto (R$)", min_value=0.0, step=10.0, value=0.0)
+            with c7:
+                obs = st.text_input("Observação (opcional)")
+
+            salvar = st.form_submit_button("Salvar apontamento", type="primary", use_container_width=True)
+            if salvar:
+                try:
+                    exec_sql(
+                        """
+                        insert into public.apontamentos
+                        (obra_id,pessoa_id,data,tipo_dia,valor_base,desconto_valor,observacao)
+                        values (%s,%s,%s,%s,%s,%s,%s);
+                        """,
+                        (int(obra_id), int(pessoa_id), data_ap, tipo_dia, float(valor_base), float(desconto), obs.strip() or None),
+                    )
+                    st.success("Apontamento salvo.")
+                    st.rerun()
+                except psycopg2.errors.UniqueViolation:
+                    st.warning("Já existe apontamento para essa pessoa nesse dia nessa obra.")
+                    st.stop()
+
+    # ---------- EDITAR ----------
+    else:
+        df_one = safe_df("select * from public.apontamentos where id=%s;", (int(edit_id),))
+        if df_one.empty:
+            st.session_state["edit_ap"] = None
+            st.rerun()
+        r = df_one.iloc[0]
+
+        # trava se apontamento estiver ligado a pagamento PAGO
+        lock = safe_df(
+            """
+            select exists (
+              select 1
+              from public.pagamento_itens pi
+              join public.pagamentos p on p.id=pi.pagamento_id
+              where pi.apontamento_id=%s and p.status='PAGO'
+            ) as travado;
+            """,
+            (int(edit_id),),
+        )
+        travado = bool(lock.iloc[0]["travado"])
+
+        if travado:
+            st.warning("🔒 Este apontamento está ligado a pagamento PAGO. Não é possível editar/excluir.")
+            if st.button("Voltar"):
+                st.session_state["edit_ap"] = None
+                st.rerun()
+        else:
+            with st.form("form_ap_edit", clear_on_submit=False):
+                c1, c2, c3 = st.columns([4, 4, 2])
+                with c1:
+                    obra_id = st.selectbox(
+                        "Obra",
+                        obra_ids,
+                        index=obra_ids.index(int(r["obra_id"])) if int(r["obra_id"]) in obra_ids else 0,
+                        format_func=lambda x: df_obras.loc[df_obras["id"] == x, "titulo"].iloc[0],
+                        key="ap_obra_edit",
+                    )
+                with c2:
+                    pessoa_id = st.selectbox(
+                        "Profissional",
+                        pessoa_ids,
+                        index=pessoa_ids.index(int(r["pessoa_id"])) if int(r["pessoa_id"]) in pessoa_ids else 0,
+                        format_func=lambda x: df_pessoas.loc[df_pessoas["id"] == x, "nome"].iloc[0],
+                        key="ap_pessoa_edit",
+                    )
+                with c3:
+                    data_ap = st.date_input("Data", value=r["data"], key="ap_data_edit")
+
+                c4, c5, c6, c7 = st.columns([2, 2, 2, 4])
+                with c4:
+                    tipo_dia = st.selectbox(
+                        "Tipo do dia",
+                        ["NORMAL", "FERIADO", "SABADO", "DOMINGO"],
+                        index=["NORMAL", "FERIADO", "SABADO", "DOMINGO"].index(r["tipo_dia"]),
+                        key="ap_tipo_edit",
+                    )
+                with c5:
+                    valor_base = st.number_input("Valor base (R$)", min_value=0.0, step=50.0, value=float(r["valor_base"]), key="ap_vb_edit")
+                with c6:
+                    desconto = st.number_input("Desconto (R$)", min_value=0.0, step=10.0, value=float(r["desconto_valor"]), key="ap_desc_edit")
+                with c7:
+                    obs = st.text_input("Observação (opcional)", value=r["observacao"] or "", key="ap_obs_edit")
+
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    salvar_alt = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+                with b2:
+                    cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
+                with b3:
+                    excluir = st.form_submit_button("Excluir", use_container_width=True)
+
+                if salvar_alt:
+                    try:
+                        exec_sql(
+                            """
+                            update public.apontamentos
+                            set obra_id=%s, pessoa_id=%s, data=%s, tipo_dia=%s,
+                                valor_base=%s, desconto_valor=%s, observacao=%s
+                            where id=%s;
+                            """,
+                            (int(obra_id), int(pessoa_id), data_ap, tipo_dia, float(valor_base), float(desconto), obs.strip() or None, int(edit_id)),
+                        )
+                        st.success("Apontamento atualizado.")
+                        st.session_state["edit_ap"] = None
+                        st.rerun()
+                    except psycopg2.errors.UniqueViolation:
+                        st.warning("Conflito: já existe apontamento para essa pessoa nesse dia nessa obra.")
+                        st.stop()
+
+                if cancelar:
+                    st.session_state["edit_ap"] = None
+                    st.rerun()
+
+                if excluir:
+                    # remove itens e aponta (pagamento será recalculado ao gerar semana novamente)
+                    exec_sql("delete from public.pagamento_itens where apontamento_id=%s;", (int(edit_id),))
+                    exec_sql("delete from public.apontamentos where id=%s;", (int(edit_id),))
+                    st.success("Apontamento excluído.")
+                    st.session_state["edit_ap"] = None
+                    st.rerun()
+
+    st.divider()
+    st.markdown("### Apontamentos recentes")
+    df_recent = safe_df(
+        """
+        select a.id, a.data, p.nome as profissional, o.titulo as obra,
+               a.tipo_dia, a.valor_final,
+               exists (
+                 select 1
+                 from public.pagamento_itens pi
+                 join public.pagamentos pg on pg.id=pi.pagamento_id
+                 where pi.apontamento_id=a.id and pg.status='PAGO'
+               ) as travado_pago
+        from public.apontamentos a
+        join public.pessoas p on p.id=a.pessoa_id
+        join public.obras o on o.id=a.obra_id
+        order by a.data desc, a.id desc
+        limit 80;
+        """
+    )
+
+    if df_recent.empty:
+        st.info("Nenhum apontamento ainda.")
+    else:
+        for _, rr in df_recent.iterrows():
+            colA, colB, colC, colD, colE = st.columns([2, 4, 3, 2, 2])
+            with colA:
+                st.write(f"**{rr['data']}**")
+            with colB:
+                st.write(rr["profissional"])
+                if rr["travado_pago"]:
+                    st.caption("🔒 pago")
+            with colC:
+                st.write(rr["obra"])
+            with colD:
+                st.write(rr["tipo_dia"])
+            with colE:
+                if st.button("EDITAR ✏️", key=f"ap_edit_{int(rr['id'])}", disabled=bool(rr["travado_pago"]), use_container_width=True):
+                    st.session_state["edit_ap"] = int(rr["id"])
+                    st.rerun()
+
+# ======================================================
+# FINANCEIRO (gerar, pagar, estornar, histórico)
+# ======================================================
+if menu == "FINANCEIRO":
+    st.subheader("💰 Financeiro")
+
+    # -------- Gerar pagamentos da semana --------
+    st.markdown("## 1) Gerar pagamentos da semana")
+    segunda = st.date_input("Segunda-feira da semana", value=(date.today() - timedelta(days=date.today().weekday())))
+    if st.button("Gerar pagamentos desta semana", type="primary", use_container_width=True):
+        exec_sql("select public.fn_gerar_pagamentos_semana(%s);", (segunda,))
+        st.success("Pagamentos gerados/atualizados.")
+        st.rerun()
+
+    st.divider()
+
+    # -------- Pagar / Estornar --------
+    st.markdown("## 2) Pagar / Estornar")
+
+    tab1, tab2 = st.tabs(["Pagar pendentes", "Histórico por profissional"])
+
+    with tab1:
+        st.markdown("### Pendentes para sexta")
+        df_sexta = safe_df("select * from public.pagamentos_para_sexta;")
+        if df_sexta.empty:
+            st.info("Nada para pagar na próxima sexta.")
+        else:
+            data_pg = st.date_input("Data do pagamento", value=date.today(), key="data_pg_fin")
+            for _, r in df_sexta.iterrows():
+                c1, c2, c3 = st.columns([6, 2, 2])
+                with c1:
+                    st.write(f"**{r['pessoa_nome']}** • {r['tipo']}")
+                with c2:
+                    st.write(brl(r["valor_total"]))
+                with c3:
+                    if st.button("Pagar", key=f"pay_{int(r['id'])}", type="primary", use_container_width=True):
+                        exec_sql("select public.fn_marcar_pagamento_pago(%s,%s,%s);", (int(r["id"]), st.session_state["usuario"], data_pg))
+                        st.success("Pago!")
+                        st.rerun()
+
+        st.divider()
+        st.markdown("### Extras pendentes (sábado/domingo)")
+        df_extras = safe_df("select * from public.pagamentos_extras_pendentes;")
+        if df_extras.empty:
+            st.info("Sem extras pendentes.")
+        else:
+            data_pg2 = st.date_input("Data do pagamento (extras)", value=date.today(), key="data_pg_extras")
+            for _, r in df_extras.iterrows():
+                c1, c2, c3 = st.columns([6, 2, 2])
+                with c1:
+                    st.write(f"**{r['pessoa_nome']}** • EXTRA ({r.get('data_extra')})")
+                with c2:
+                    st.write(brl(r["valor_total"]))
+                with c3:
+                    if st.button("Pagar extra", key=f"pay_extra_{int(r['id'])}", type="primary", use_container_width=True):
+                        exec_sql("select public.fn_marcar_pagamento_pago(%s,%s,%s);", (int(r["id"]), st.session_state["usuario"], data_pg2))
+                        st.success("Extra pago!")
+                        st.rerun()
+
+        st.divider()
+        st.markdown("### Estornar pagamento (se houve confusão)")
+        df_pagos = safe_df("""
+            select p.id, pe.nome as pessoa, p.tipo, p.valor_total, p.pago_em
+            from public.pagamentos p
+            join public.pessoas pe on pe.id=p.pessoa_id
+            where p.status='PAGO'
+            order by p.pago_em desc, p.id desc
+            limit 200;
+        """)
+        if df_pagos.empty:
+            st.info("Nenhum pagamento PAGO para estornar.")
+        else:
+            opcoes = df_pagos["id"].tolist()
+            pid = st.selectbox(
+                "Selecione um pagamento PAGO",
+                opcoes,
+                format_func=lambda x: f"#{x} • {df_pagos.loc[df_pagos['id']==x,'pessoa'].iloc[0]} • {df_pagos.loc[df_pagos['id']==x,'tipo'].iloc[0]} • {brl(df_pagos.loc[df_pagos['id']==x,'valor_total'].iloc[0])} • {df_pagos.loc[df_pagos['id']==x,'pago_em'].iloc[0]}",
+            )
+            motivo = st.text_input("Motivo do estorno (opcional)")
+            if st.button("Estornar", use_container_width=True):
+                exec_sql("select public.fn_estornar_pagamento(%s,%s,%s);", (int(pid), st.session_state["usuario"], motivo or None))
+                st.success("Pagamento estornado (voltou para ABERTO).")
+                st.rerun()
+
+    with tab2:
+        st.markdown("### Histórico por profissional (muito útil 60+)")
+        df_prof = safe_df("select id,nome from public.pessoas order by nome;")
+        if df_prof.empty:
+            st.info("Cadastre profissionais primeiro.")
+        else:
+            prof_id = st.selectbox("Profissional", df_prof["id"].tolist(), format_func=lambda x: df_prof.loc[df_prof["id"]==x,"nome"].iloc[0])
+            df_hist = safe_df("""
+                select p.id, p.tipo, p.status, p.valor_total, p.referencia_inicio, p.referencia_fim, p.pago_em
+                from public.pagamentos p
+                where p.pessoa_id=%s
+                order by coalesce(p.pago_em, p.referencia_fim, p.referencia_inicio) desc, p.id desc
+                limit 200;
+            """, (int(prof_id),))
+            st.dataframe(df_hist, use_container_width=True, hide_index=True)
