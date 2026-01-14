@@ -123,23 +123,25 @@ if menu == "HOJE":
 
     def badge(ok: bool): return "✅" if ok else "⚠️"
 
-    colL, colR = st.columns([2, 3])
+    colL1, colL2, colR1, colR2 = st.columns([3, 3, 3, 3])
 
-    with colL:
+    with colL1:
         st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos (hoje)")
         st.caption(f"Apontamentos hoje: {qtd_ap_hoje}")
         st.button("Ir para Apontamentos", on_click=nav, args=("Apontamentos",), type="primary", use_container_width=True)
 
+    with colL2:
         st.markdown(f"### {badge(qtd_pg_sem > 0)} 2) Gerar pagamentos da semana")
         st.caption(f"Semana: {segunda.strftime('%d/%m/%Y')} → {sexta.strftime('%d/%m/%Y')}")
         st.button("Ir para Gerar Pagamentos", on_click=nav, args=("Gerar Pagamentos",), use_container_width=True)
 
-    with colR:
+    with colR1:
         st.markdown(f"### {badge(qtd_para_sexta == 0)} 3) Pagar na sexta")
         st.caption(f"Pendências para sexta: {qtd_para_sexta}")
         st.button("Ir para Pagar", on_click=nav, args=("Pagar",), use_container_width=True)
 
-        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (sábado/domingo)")
+    with colR2:
+        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (sáb/dom)")
         st.caption(f"Extras pendentes: {qtd_extras}")
         st.button("Ir para Pagar (extras)", on_click=nav, args=("Pagar",), use_container_width=True)
 
