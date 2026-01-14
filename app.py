@@ -311,7 +311,7 @@ with st.sidebar:
         st.rerun()
 
 menu = st.session_state["menu"]
-st.title("🏗️ SEPOL - DEV")
+# st.title("🏗️ SEPOL - DEV")
 
 # ======================================================
 # PROFISSIONAIS (estável: form + modo edição)
