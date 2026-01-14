@@ -458,6 +458,10 @@ if menu == "CLIENTES":
                 st.session_state["edit_cliente"] = None
                 st.rerun()
 
+            if cancelar:
+                st.session_state["edit_cliente"] = None
+                st.rerun()
+
     st.markdown("### 📋 Lista de clientes")
     df_cli = safe_df("""
         select c.id, c.nome, c.telefone, c.origem, c.ativo,
