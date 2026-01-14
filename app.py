@@ -408,25 +408,25 @@ if menu == "CLIENTES":
                     key="cli_origem_edit",
                 )
 
-                end = st.text_input("Endereço (opcional)", value=r["endereco"] or "", key="cli_end_edit")
-                
-                ids = df_ind_ativos["id"].tolist()
-                opcoes = [None] + ids
-                
-                default_sel = None
-                if pd.notna(r["indicacao_id"]):
-                    default_sel = int(r["indicacao_id"])
-                
-                # tenta manter a seleção atual
-                idx = opcoes.index(default_sel) if default_sel in opcoes else 0
-                
-                indicacao_id = st.selectbox(
-                    "Quem indicou (apenas se Origem = INDICADO)",
-                    opcoes,
-                    index=idx,
-                    format_func=lambda x: "—" if x is None else indic_fmt(x),
-                    key="cli_ind_edit_any",
-                )
+            end = st.text_input("Endereço (opcional)", value=r["endereco"] or "", key="cli_end_edit")
+            
+            ids = df_ind_ativos["id"].tolist()
+            opcoes = [None] + ids
+            
+            default_sel = None
+            if pd.notna(r["indicacao_id"]):
+                default_sel = int(r["indicacao_id"])
+            
+            # tenta manter a seleção atual
+            idx = opcoes.index(default_sel) if default_sel in opcoes else 0
+            
+            indicacao_id = st.selectbox(
+                "Quem indicou (apenas se Origem = INDICADO)",
+                opcoes,
+                index=idx,
+                format_func=lambda x: "—" if x is None else indic_fmt(x),
+                key="cli_ind_edit_any",
+            )
 
             b1, b2 = st.columns(2)
             with b1:
