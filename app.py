@@ -16,21 +16,53 @@ st.set_page_config("DEV SEPOL - Controle de Obras", layout="wide")
 # DB
 # ======================================================
 @st.cache_resource
+def _conn_holder():
+    # guarda uma conexão (pode morrer; a gente valida antes de usar)
+    return {"conn": None}
+
 def get_conn():
-    return psycopg2.connect(
-        st.secrets["DATABASE_URL"],
-        cursor_factory=RealDictCursor,
-        connect_timeout=10,
-    )
+    holder = _conn_holder()
+    conn = holder.get("conn")
+
+    # se não existe ou está fechada → cria nova
+    if conn is None or getattr(conn, "closed", 1) != 0:
+        holder["conn"] = psycopg2.connect(
+            st.secrets["DATABASE_URL"],
+            cursor_factory=RealDictCursor,
+            connect_timeout=10,
+            sslmode="require",
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5,
+        )
+        conn = holder["conn"]
+
+    return conn
 
 def query_df(sql, params=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
-            return pd.DataFrame(cur.fetchall())
+            rows = cur.fetchall()
+        return pd.DataFrame(rows)
+    except psycopg2.InterfaceError:
+        # conexão morreu → recria e tenta 1x
+        holder = _conn_holder()
+        holder["conn"] = None
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+            rows = cur.fetchall()
+        return pd.DataFrame(rows)
     except Exception:
-        conn.rollback()
+        # rollback só se conexão estiver viva
+        try:
+            if getattr(conn, "closed", 1) == 0:
+                conn.rollback()
+        except Exception:
+            pass
         raise
 
 def exec_sql(sql, params=None):
@@ -39,15 +71,27 @@ def exec_sql(sql, params=None):
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
         conn.commit()
+    except psycopg2.InterfaceError:
+        # conexão morreu → recria e tenta 1x
+        holder = _conn_holder()
+        holder["conn"] = None
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(sql, params or ())
+        conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            if getattr(conn, "closed", 1) == 0:
+                conn.rollback()
+        except Exception:
+            pass
         raise
 
 def safe_df(sql, params=None):
     try:
         return query_df(sql, params)
     except Exception as e:
-        st.error("Falha ao consultar o banco. Verifique se você rodou o SQL completo (tabelas + views + functions).")
+        st.error("Falha ao consultar o banco. (Conexão pode ter expirado; tente novamente.)")
         st.exception(e)
         st.stop()
 
@@ -121,6 +165,10 @@ with st.sidebar:
     if st.button("Sair"):
         st.session_state["usuario"] = None
         st.rerun()
+
+    if st.button("🔄 Recarregar conexão"):
+        _conn_holder()["conn"] = None
+        st.success("Conexão será recriada no próximo acesso.")
 
 menu = st.session_state["menu"]
 st.title("🏗️ SEPOL - Cadastros")
