@@ -63,10 +63,6 @@ def monday(d: date) -> date:
 # ======================================================
 # Helpers
 # ======================================================
-def clear(keys):
-    for k in keys:
-        st.session_state[k] = ""
-
 def set_edit(key, val):
     st.session_state[key] = val
 
@@ -123,53 +119,71 @@ if menu == "PROFISSIONAIS":
 
     if "edit_prof" not in st.session_state:
         st.session_state["edit_prof"] = None
+    if "p_nome" not in st.session_state:
+        st.session_state["p_nome"] = ""
+    if "p_tel" not in st.session_state:
+        st.session_state["p_tel"] = ""
+    if "p_tipo" not in st.session_state:
+        st.session_state["p_tipo"] = "PINTOR"
 
     edit_id = st.session_state["edit_prof"]
-    row = None
-    if edit_id:
-        df = safe_df("select * from public.pessoas where id=%s;", (edit_id,))
-        if not df.empty:
-            row = df.iloc[0]
 
-    nome = st.text_input("Nome", value=row["nome"] if row is not None else "", key="p_nome")
-    tipo = st.selectbox("Tipo", ["PINTOR","AJUDANTE","TERCEIRO"],
-                        index=["PINTOR","AJUDANTE","TERCEIRO"].index(row["tipo"]) if row is not None else 0,
-                        key="p_tipo")
-    tel  = st.text_input("Telefone", value=row["telefone"] or "" if row is not None else "", key="p_tel")
+    nome = st.text_input("Nome", key="p_nome")
+    tipo = st.selectbox("Tipo", ["PINTOR","AJUDANTE","TERCEIRO"], key="p_tipo")
+    tel  = st.text_input("Telefone", key="p_tel")
 
     c1, c2 = st.columns(2)
     with c1:
         if not edit_id:
             if st.button("Salvar", type="primary"):
-                exec_sql("insert into public.pessoas (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
-                         (nome, tipo, tel or None))
-                clear(["p_nome","p_tel"])
+                exec_sql(
+                    "insert into public.pessoas (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
+                    (nome, tipo, tel or None)
+                )
+                st.session_state["p_nome"] = ""
+                st.session_state["p_tel"] = ""
+                st.session_state["p_tipo"] = "PINTOR"
                 st.success("Profissional cadastrado.")
                 st.rerun()
         else:
             if st.button("Salvar alteração", type="primary"):
-                exec_sql("update public.pessoas set nome=%s,tipo=%s,telefone=%s where id=%s;",
-                         (nome,tipo,tel or None,int(edit_id)))
-                cancel_edit("edit_prof", ["p_nome","p_tel"])
+                exec_sql(
+                    "update public.pessoas set nome=%s,tipo=%s,telefone=%s where id=%s;",
+                    (nome, tipo, tel or None, int(edit_id))
+                )
+                st.session_state["edit_prof"] = None
+                st.session_state["p_nome"] = ""
+                st.session_state["p_tel"] = ""
+                st.session_state["p_tipo"] = "PINTOR"
+                st.success("Profissional atualizado.")
+                st.rerun()
 
     with c2:
         if edit_id:
             if st.button("Cancelar edição"):
-                cancel_edit("edit_prof", ["p_nome","p_tel"])
+                st.session_state["edit_prof"] = None
+                st.session_state["p_nome"] = ""
+                st.session_state["p_tel"] = ""
+                st.session_state["p_tipo"] = "PINTOR"
+                st.rerun()
 
     st.divider()
     df = safe_df("select * from public.pessoas order by nome;")
 
     for _, r in df.iterrows():
-        cA, cB, cC = st.columns([5,2,2])
-        with cA:
+        colA, colB, colC = st.columns([5,2,2])
+        with colA:
             st.write(f"**{r['nome']}** — {r['tipo']}")
-        with cB:
+        with colB:
             st.write("ATIVO" if r["ativo"] else "INATIVO")
-        with cC:
+        with colC:
             if st.button("Editar", key=f"p_edit_{r['id']}"):
-                set_edit("edit_prof", int(r["id"]))
+                st.session_state["edit_prof"] = int(r["id"])
+                st.session_state["p_nome"] = r["nome"]
+                st.session_state["p_tel"]  = r["telefone"] or ""
+                st.session_state["p_tipo"] = r["tipo"]
                 st.rerun()
+
             if r["ativo"]:
                 if st.button("Inativar", key=f"p_inat_{r['id']}"):
                     exec_sql("update public.pessoas set ativo=false where id=%s;", (int(r["id"]),))
@@ -178,6 +192,7 @@ if menu == "PROFISSIONAIS":
                 if st.button("Ativar", key=f"p_at_{r['id']}"):
                     exec_sql("update public.pessoas set ativo=true where id=%s;", (int(r["id"]),))
                     st.rerun()
+
 
 # ======================================================
 # CLIENTES + INDICAÇÕES
@@ -199,7 +214,6 @@ if menu == "CLIENTES":
                 "insert into public.indicacoes (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
                 (ind_nome, ind_tipo, ind_tel or None),
             )
-            clear(["ind_nome","ind_tel"])
             st.success("Indicação cadastrada.")
             st.rerun()
 
@@ -251,7 +265,6 @@ if menu == "CLIENTES":
                     """,
                     (nome, tel or None, end or None, origem, indicacao_id),
                 )
-                clear(["c_nome","c_tel","c_end"])
                 st.success("Cliente cadastrado.")
                 st.rerun()
         else:
@@ -321,7 +334,6 @@ if menu == "OBRAS":
                 "insert into public.clientes (nome,telefone,origem,ativo) values (%s,%s,'PROPRIO',true);",
                 (rc_nome, rc_tel or None),
             )
-            clear(["rc_nome","rc_tel"])
             st.success("Cliente criado.")
             st.rerun()
 
@@ -368,7 +380,6 @@ if menu == "OBRAS":
                     """,
                     (cliente_id,titulo,endereco or None,status),
                 )
-                clear(["o_tit","o_end"])
                 st.success("Obra cadastrada.")
                 st.rerun()
         else:
