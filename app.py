@@ -112,86 +112,122 @@ menu = st.session_state["menu"]
 st.title("🏗️ SEPOL - Cadastros")
 
 # ======================================================
-# PROFISSIONAIS
+# PROFISSIONAIS (estável: form + modo edição)
 # ======================================================
 if menu == "PROFISSIONAIS":
     st.subheader("👷 Profissionais")
 
     if "edit_prof" not in st.session_state:
-        st.session_state["edit_prof"] = None
-    if "p_nome" not in st.session_state:
-        st.session_state["p_nome"] = ""
-    if "p_tel" not in st.session_state:
-        st.session_state["p_tel"] = ""
-    if "p_tipo" not in st.session_state:
-        st.session_state["p_tipo"] = "PINTOR"
+        st.session_state["edit_prof"] = None  # id em edição
 
     edit_id = st.session_state["edit_prof"]
 
-    nome = st.text_input("Nome", key="p_nome")
-    tipo = st.selectbox("Tipo", ["PINTOR","AJUDANTE","TERCEIRO"], key="p_tipo")
-    tel  = st.text_input("Telefone", key="p_tel")
+    # ---------- FORM: NOVO ----------
+    if edit_id is None:
+        st.markdown("### ➕ Novo profissional")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if not edit_id:
-            if st.button("Salvar", type="primary"):
+        with st.form("form_prof_novo", clear_on_submit=True):
+            nome = st.text_input("Nome")
+            tipo = st.selectbox("Tipo", ["PINTOR", "AJUDANTE", "TERCEIRO"], index=0)
+            tel = st.text_input("Telefone (opcional)")
+
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                salvar = st.form_submit_button("Salvar", type="primary", use_container_width=True)
+            with col2:
+                st.write("")  # espaçador
+
+            if salvar:
+                if not nome.strip():
+                    st.warning("Informe o nome.")
+                    st.stop()
+
                 exec_sql(
                     "insert into public.pessoas (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
-                    (nome, tipo, tel or None)
+                    (nome.strip(), tipo, tel.strip() or None),
                 )
-                st.session_state["p_nome"] = ""
-                st.session_state["p_tel"] = ""
-                st.session_state["p_tipo"] = "PINTOR"
                 st.success("Profissional cadastrado.")
                 st.rerun()
-        else:
-            if st.button("Salvar alteração", type="primary"):
+
+    # ---------- FORM: EDITAR ----------
+    else:
+        st.markdown("### ✏️ Editar profissional")
+
+        df_one = safe_df("select * from public.pessoas where id=%s;", (int(edit_id),))
+        if df_one.empty:
+            st.session_state["edit_prof"] = None
+            st.rerun()
+        r = df_one.iloc[0]
+
+        with st.form("form_prof_edit", clear_on_submit=False):
+            nome = st.text_input("Nome", value=r["nome"], key="p_nome_edit")
+            tipo = st.selectbox(
+                "Tipo",
+                ["PINTOR", "AJUDANTE", "TERCEIRO"],
+                index=["PINTOR", "AJUDANTE", "TERCEIRO"].index(r["tipo"]),
+                key="p_tipo_edit",
+            )
+            tel = st.text_input("Telefone (opcional)", value=r["telefone"] or "", key="p_tel_edit")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                salvar_alt = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+            with c2:
+                cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
+
+            if salvar_alt:
+                if not nome.strip():
+                    st.warning("Informe o nome.")
+                    st.stop()
+
                 exec_sql(
-                    "update public.pessoas set nome=%s,tipo=%s,telefone=%s where id=%s;",
-                    (nome, tipo, tel or None, int(edit_id))
+                    "update public.pessoas set nome=%s, tipo=%s, telefone=%s where id=%s;",
+                    (nome.strip(), tipo, tel.strip() or None, int(edit_id)),
                 )
-                st.session_state["edit_prof"] = None
-                st.session_state["p_nome"] = ""
-                st.session_state["p_tel"] = ""
-                st.session_state["p_tipo"] = "PINTOR"
                 st.success("Profissional atualizado.")
+                st.session_state["edit_prof"] = None
+                # Não mexe em session_state dos widgets aqui; apenas rerun
                 st.rerun()
 
-    with c2:
-        if edit_id:
-            if st.button("Cancelar edição"):
+            if cancelar:
                 st.session_state["edit_prof"] = None
-                st.session_state["p_nome"] = ""
-                st.session_state["p_tel"] = ""
-                st.session_state["p_tipo"] = "PINTOR"
                 st.rerun()
 
     st.divider()
-    df = safe_df("select * from public.pessoas order by nome;")
 
-    for _, r in df.iterrows():
-        colA, colB, colC = st.columns([5,2,2])
-        with colA:
-            st.write(f"**{r['nome']}** — {r['tipo']}")
-        with colB:
-            st.write("ATIVO" if r["ativo"] else "INATIVO")
-        with colC:
-            if st.button("Editar", key=f"p_edit_{r['id']}"):
-                st.session_state["edit_prof"] = int(r["id"])
-                st.session_state["p_nome"] = r["nome"]
-                st.session_state["p_tel"]  = r["telefone"] or ""
-                st.session_state["p_tipo"] = r["tipo"]
-                st.rerun()
+    # ---------- LISTA ----------
+    st.markdown("### 📋 Lista")
+    df = safe_df("select id, nome, tipo, telefone, ativo from public.pessoas order by nome;")
 
-            if r["ativo"]:
-                if st.button("Inativar", key=f"p_inat_{r['id']}"):
-                    exec_sql("update public.pessoas set ativo=false where id=%s;", (int(r["id"]),))
-                    st.rerun()
-            else:
-                if st.button("Ativar", key=f"p_at_{r['id']}"):
-                    exec_sql("update public.pessoas set ativo=true where id=%s;", (int(r["id"]),))
-                    st.rerun()
+    if df.empty:
+        st.info("Nenhum profissional cadastrado.")
+    else:
+        for _, rr in df.iterrows():
+            colA, colB, colC = st.columns([6, 2, 2])
+
+            with colA:
+                st.write(f"**{rr['nome']}** — {rr['tipo']}")
+                if rr["telefone"]:
+                    st.caption(rr["telefone"])
+
+            with colB:
+                st.write("ATIVO ✅" if rr["ativo"] else "INATIVO ⛔")
+
+            with colC:
+                b1, b2 = st.columns(2)  # lado a lado
+                with b1:
+                    if st.button("Editar", key=f"p_edit_{int(rr['id'])}", use_container_width=True):
+                        st.session_state["edit_prof"] = int(rr["id"])
+                        st.rerun()
+                with b2:
+                    if rr["ativo"]:
+                        if st.button("Inativar", key=f"p_inat_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.pessoas set ativo=false where id=%s;", (int(rr["id"]),))
+                            st.rerun()
+                    else:
+                        if st.button("Ativar", key=f"p_at_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.pessoas set ativo=true where id=%s;", (int(rr["id"]),))
+                            st.rerun()
 
 
 # ======================================================
