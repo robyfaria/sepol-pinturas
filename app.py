@@ -354,6 +354,8 @@ if menu == "CLIENTES":
             with c3:
                 origem = st.selectbox("Origem", ["PROPRIO", "INDICADO"], index=0)
 
+            end = st.text_input("Endereço (opcional)")
+
             # Mostra sempre (porque em form não re-renderiza condicional)
             ids = df_ind_ativos["id"].tolist()
             opcoes = [None] + ids
@@ -405,6 +407,8 @@ if menu == "CLIENTES":
                     index=["PROPRIO", "INDICADO"].index(r["origem"]),
                     key="cli_origem_edit",
                 )
+
+                end = st.text_input("Endereço (opcional)", value=r["endereco"] or "", key="cli_end_edit")
                 
                 ids = df_ind_ativos["id"].tolist()
                 opcoes = [None] + ids
@@ -520,50 +524,57 @@ if menu == "OBRAS":
                 tel = st.text_input("Telefone (opcional)")
             with c3:
                 origem = st.selectbox("Origem", ["PROPRIO", "INDICADO"], index=0)
-
+    
             end = st.text_input("Endereço (opcional)")
-
-            indicacao_id = None
-            if origem == "INDICADO":
-                # Criar indicação rápida
-                st.markdown("**Indicação**")
-                cc1, cc2, cc3 = st.columns([4, 2, 2])
-                with cc1:
-                    ind_nome = st.text_input("Nova indicação (opcional)")
-                with cc2:
-                    ind_tipo = st.selectbox("Tipo", ["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"], index=0)
-                with cc3:
-                    ind_tel = st.text_input("Telefone indicação (opcional)")
-
-                # Ou escolher existente
-                ids = df_ind_ativos["id"].tolist()
-                if ids:
-                    indicacao_id = st.selectbox("Ou selecione indicação existente", ids, format_func=ind_fmt)
-                else:
-                    indicacao_id = None
-
+    
+            st.markdown("**Indicação (apenas se Origem = INDICADO)**")
+    
+            # Nova indicação (opcional) — sempre visível
+            cc1, cc2, cc3 = st.columns([4, 2, 2])
+            with cc1:
+                ind_nome = st.text_input("Nova indicação (opcional)")
+            with cc2:
+                ind_tipo = st.selectbox("Tipo da indicação", ["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"], index=0)
+            with cc3:
+                ind_tel = st.text_input("Telefone indicação (opcional)")
+    
+            # Selecionar indicação existente — sempre visível
+            ids = df_ind_ativos["id"].tolist()
+            opcoes = [None] + ids
+            indicacao_id = st.selectbox(
+                "Ou selecione indicação existente",
+                opcoes,
+                format_func=lambda x: "—" if x is None else ind_fmt(x),
+            )
+    
             criar = st.form_submit_button("Criar cliente", type="primary", use_container_width=True)
-
+    
             if criar:
                 if not nome.strip():
                     st.warning("Informe o nome do cliente.")
                     st.stop()
-
-                # Se origem indicado: precisa ter indicação (nova ou existente)
+    
+                # Se origem indicado, precisa resolver indicacao_id (nova ou existente)
                 if origem == "INDICADO":
+                    # Se digitou nova indicação, cria e usa ela
                     if ind_nome.strip():
-                        # cria nova indicação e usa ela
                         exec_sql(
                             "insert into public.indicacoes (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
                             (ind_nome.strip(), ind_tipo, ind_tel.strip() or None),
                         )
-                        # pega o id criado
-                        df_last = safe_df("select id from public.indicacoes where nome=%s order by id desc limit 1;", (ind_nome.strip(),))
+                        df_last = safe_df(
+                            "select id from public.indicacoes where nome=%s order by id desc limit 1;",
+                            (ind_nome.strip(),),
+                        )
                         indicacao_id = int(df_last.iloc[0]["id"])
-                    if not indicacao_id:
+    
+                    # Se ainda não tem, exige seleção
+                    if indicacao_id is None:
                         st.warning("Selecione uma indicação existente ou cadastre uma nova.")
                         st.stop()
-
+                else:
+                    indicacao_id = None  # PROPRIO sempre nulo
+    
                 exec_sql(
                     """
                     insert into public.clientes (nome,telefone,endereco,origem,indicacao_id,ativo)
@@ -571,6 +582,7 @@ if menu == "OBRAS":
                     """,
                     (nome.strip(), tel.strip() or None, end.strip() or None, origem, indicacao_id),
                 )
+    
                 st.success("Cliente criado. Agora selecione ele no cadastro da obra abaixo.")
                 st.rerun()
 
