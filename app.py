@@ -228,9 +228,9 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
 
     y -= 14
     c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, f"TOTAL BRUTO: {brl(r['valor_total'])}")
-    c.drawString(200, y, f"DESCONTO: {brl(r['desconto_valor'])}")
-    c.drawString(350, y, f"TOTAL FINAL: {brl(r['valor_total_final'])}")
+    c.drawString(50, y, f"VALOR BRUTO: {brl(r['valor_total'])}")
+    c.drawString(225, y, f"DESCONTO: {brl(r['desconto_valor'])}")
+    c.drawString(375, y, f"VALOR FINAL: {brl(r['valor_total_final'])}")
     y -= 20
 
     c.showPage()
