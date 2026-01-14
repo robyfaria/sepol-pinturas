@@ -460,7 +460,7 @@ if menu == "CLIENTES":
                 options=[None] + ids,
                 index=idx,
                 format_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
-                key="cli_ind_edit_any"
+                key="cli_ind_edit_any",
                 disabled=(len(ids)==0),
             )
 
