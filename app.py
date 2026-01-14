@@ -163,7 +163,7 @@ if menu == "HOJE":
             st.rerun()
 
     with colW:
-        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (Sáb/Dom)")
+        st.markdown(f"### {badge(qtd_extras == 0)} 4) Extras (Sáb/Dom)")
         if qtd_extras == 0:
             st.success("Sem extras pendentes.")
         else:
