@@ -9,11 +9,22 @@ from datetime import date, timedelta
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+import os
 
 # ======================================================
 # CONFIG
 # ======================================================
-st.set_page_config("DEV SEPOL - Controle de Obras", layout="wide")
+# st.set_page_config("DEV SEPOL - Controle de Obras", layout="wide")
+st.set_page_config(page_title="DEV SEPOL - Pinturas", layout="wide")
+
+col_title, col_logo = st.columns([6,1,1])
+
+with col_title:
+    st.markdown("## 🏗️ SEPOL - Controle de Obras")
+
+with col_logo:
+    st.image("assets/sepol_logo.png", width=120))
 
 # ======================================================
 # DB
@@ -155,6 +166,20 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
+    
+    # --- LOGO (topo direito) ---
+    logo_path = "assets/sepol_logo.png"
+    if os.path.exists(logo_path):
+        try:
+            logo = ImageReader(logo_path)
+            logo_w = 110  # largura em pontos (ajuste fino)
+            logo_h = 40   # altura em pontos (ajuste fino)
+            x = w - 50 - logo_w
+            y = h - 50 - logo_h + 10
+            c.drawImage(logo, x, y, width=logo_w, height=logo_h, mask="auto")
+        except Exception:
+            pass
+    
     r = df_head.iloc[0]
     y = h - 50
     
