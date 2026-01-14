@@ -128,7 +128,7 @@ if menu == "HOJE":
     def badge(ok: bool):
         return "✅" if ok else "⚠️"
 
-    colX, colY = st.columns([2, 3])
+    colX, colY, colZ, colW = st.columns([2, 3])
 
     with colX:
         st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos (hoje)")
@@ -137,13 +137,14 @@ if menu == "HOJE":
             st.session_state["__menu_jump"] = "Apontamentos"
             st.rerun()
 
+    with colY:
         st.markdown(f"### {badge(qtd_pg_sem > 0)} 2) Gerar pagamentos da semana")
         st.caption(f"Semana: {segunda.strftime('%d/%m/%Y')} → {sexta.strftime('%d/%m/%Y')} • Gerado: {qtd_pg_sem}")
         if st.button("Ir para Gerar Pagamentos", use_container_width=True, key="todo_go_gp"):
             st.session_state["__menu_jump"] = "Gerar Pagamentos"
             st.rerun()
 
-    with colY:
+    with colZ:
         st.markdown(f"### {badge(qtd_para_sexta == 0)} 3) Pagar na sexta")
         if qtd_para_sexta == 0:
             st.success("Nada pendente para a próxima sexta.")
@@ -153,6 +154,7 @@ if menu == "HOJE":
             st.session_state["__menu_jump"] = "Pagar"
             st.rerun()
 
+    with colW:
         st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (sábado/domingo)")
         if qtd_extras == 0:
             st.success("Sem extras pendentes.")
