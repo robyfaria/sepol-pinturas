@@ -171,7 +171,7 @@ with st.sidebar:
         st.rerun()
 
 menu = st.session_state["menu"]
-st.title("🏗️ SEPOL - Cadastros")
+st.title("🏗️ SEPOL - DEV")
 
 # ======================================================
 # PROFISSIONAIS (estável: form + modo edição)
@@ -697,7 +697,6 @@ if menu == "SERVIÇOS":
                 with bE2:
                     st.write("")  # só pra manter alinhamento
 
-st.title("🏗️ SEPOL - OBRAS")
 # ======================================================
 # OBRAS (estável: form + modo edição + cliente rápido com origem/indicação)
 # ======================================================
@@ -1531,7 +1530,6 @@ if menu == "OBRAS":
                             st.success("Recebimento atualizado.")
                             st.rerun()
 
-st.title("🏗️ SEPOL - DEV")
 # ======================================================
 # SEPOL - V1.2 Novas funcionalidades estáveis
 # ======================================================
@@ -1574,7 +1572,6 @@ if menu == "HOJE":
             st.session_state["menu"] = "OBRAS"
             st.rerun()
 
-st.title("🏗️ SEPOL - OBRAS")
 # ======================================================
 # APONTAMENTOS (estável + trava se pago)
 # ======================================================
@@ -1785,7 +1782,6 @@ if menu == "APONTAMENTOS":
                     st.session_state["edit_ap"] = int(rr["id"])
                     st.rerun()
 
-st.title("🏗️ SEPOL - FINANCEIRO")
 # ======================================================
 # FINANCEIRO (gerar, pagar, estornar, histórico)
 # ======================================================
