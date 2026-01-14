@@ -807,7 +807,7 @@ if menu == "OBRAS":
 
     if df_cli_ativos.empty:
         st.warning("Não existe nenhum Cliente ativa cadastrado ainda.")
-        ids = []
+        cli_ids = []
     else:
         # garante colunas
         if "id" not in df_cli_ativos.columns:
