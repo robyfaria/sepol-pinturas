@@ -1452,7 +1452,7 @@ if menu == "OBRAS":
         # lista fases + recebimento existente (se houver)
         df_rec = safe_df("""
             select r.id as receb_id, r.obra_fase_id, r.status as receb_status,
-                   r.valor_previsto, r.acrescimo, r.valor_total, r.vencimento_em, r.pago_em
+                   r.valor_previsto, r.acrescimo, r.valor_total, r.vencimento, r.recebido_em
             from public.recebimentos r
             where r.orcamento_id=%s
             order by r.id desc;
@@ -1500,12 +1500,12 @@ if menu == "OBRAS":
                     )
                     venc = st.date_input(
                         "Vencimento (opcional)",
-                        value=(rec["vencimento_em"] if rec is not None and rec["vencimento_em"] is not None else date.today()),
+                        value=(rec["vencimento"] if rec is not None and rec["vencimento"] is not None else date.today()),
                         key=f"rec_venc_{fase_id}"
                     )
                     pago = st.date_input(
                         "Pago em (se PAGO)",
-                        value=(rec["pago_em"] if rec is not None and rec["pago_em"] is not None else date.today()),
+                        value=(rec["recebido_em"] if rec is not None and rec["recebido_em"] is not None else date.today()),
                         key=f"rec_pago_{fase_id}"
                     )
     
@@ -1514,7 +1514,7 @@ if menu == "OBRAS":
                         if rec is None:
                             exec_sql("""
                                 insert into public.recebimentos
-                                (obra_id, obra_fase_id, orcamento_id, status, valor_previsto, acrescimo, vencimento_em, pago_em)
+                                (obra_id, obra_fase_id, orcamento_id, status, valor_previsto, acrescimo, vencimento, recebido_em)
                                 values (%s,%s,%s,%s,%s,%s,%s,%s);
                             """, (obra_id, fase_id, int(orc_id), status, float(vb), float(ac), venc, (pago if status=='PAGO' else None)))
                             st.success("Recebimento criado.")
@@ -1523,8 +1523,8 @@ if menu == "OBRAS":
                             exec_sql("""
                                 update public.recebimentos
                                 set status=%s, valor_previsto=%s, acrescimo=%s,
-                                    vencimento_em=%s,
-                                    pago_em=%s
+                                    vencimento=%s,
+                                    recebido_em=%s
                                 where id=%s;
                             """, (status, float(vb), float(ac), venc, (pago if status=='PAGO' else None), int(rec["receb_id"])))
                             st.success("Recebimento atualizado.")
