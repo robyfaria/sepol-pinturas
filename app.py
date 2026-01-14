@@ -62,7 +62,17 @@ with st.sidebar:
     st.caption("Dica: use um nome simples, ex.: 'esposa' ou 'pintor'.")
 
     st.divider()
-    menu = st.radio("Menu", ["HOJE", "Apontamentos", "Gerar Pagamentos", "Pagar", "Cadastros (mínimo)"])
+    # menu = st.radio("Menu", ["HOJE", "Apontamentos", "Gerar Pagamentos", "Pagar", "Cadastros (mínimo)"])
+    if "menu" not in st.session_state:
+        st.session_state["menu"] = "HOJE"
+
+    st.selectbox(
+        "Menu",
+        ["HOJE", "Apontamentos", "Gerar Pagamentos", "Pagar", "Cadastros (mínimo)"],
+        key="menu"
+    )
+
+menu = st.session_state["menu"]
 
 # =========================
 # Guardrails: checar views essenciais (sem travar tudo)
@@ -142,14 +152,14 @@ if menu == "HOJE":
         st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos (hoje)")
         st.caption(f"Hoje: {hoje.strftime('%d/%m/%Y')} • Apontamentos lançados: {qtd_ap_hoje}")
         if st.button("Ir para Apontamentos", type="primary", use_container_width=True, key="todo_go_ap"):
-            st.session_state["__menu_jump"] = "Apontamentos"
+            st.session_state["menu"] = "Apontamentos"
             st.rerun()
 
     with colY:
         st.markdown(f"### {badge(qtd_pg_sem > 0)} 2) Gerar pagamentos da semana")
         st.caption(f"Semana: {segunda.strftime('%d/%m/%Y')} → {sexta.strftime('%d/%m/%Y')} • Gerado: {qtd_pg_sem}")
         if st.button("Ir para Gerar Pagamentos", use_container_width=True, key="todo_go_gp"):
-            st.session_state["__menu_jump"] = "Gerar Pagamentos"
+            st.session_state["menu"] = "Gerar Pagamentos"
             st.rerun()
 
     with colZ:
@@ -159,7 +169,7 @@ if menu == "HOJE":
         else:
             st.warning(f"Pendências para sexta: {qtd_para_sexta} pagamento(s).")
         if st.button("Ir para Pagar", use_container_width=True, key="todo_go_pay1"):
-            st.session_state["__menu_jump"] = "Pagar"
+            st.session_state["menu"] = "Pagar"
             st.rerun()
 
     with colW:
@@ -169,7 +179,7 @@ if menu == "HOJE":
         else:
             st.warning(f"Extras pendentes: {qtd_extras} pagamento(s).")
         if st.button("Ir para Pagar (extras)", use_container_width=True, key="todo_go_pay2"):
-            st.session_state["__menu_jump"] = "Pagar"
+            st.session_state["menu"] = "Pagar"
             st.rerun()
 
     st.divider()
@@ -181,15 +191,15 @@ if menu == "HOJE":
     a1, a2, a3 = st.columns(3)
     with a1:
         if st.button("1) Lançar Apontamento", type="primary", use_container_width=True, key="go_apont"):
-            st.session_state["__menu_jump"] = "Apontamentos"
+            st.session_state["menu"] = "Apontamentos"
             st.rerun()
     with a2:
         if st.button("2) Gerar Pagamentos", use_container_width=True, key="go_gerar"):
-            st.session_state["__menu_jump"] = "Gerar Pagamentos"
+            st.session_state["menu"] = "Gerar Pagamentos"
             st.rerun()
     with a3:
         if st.button("3) Pagar (sexta e extras)", use_container_width=True, key="go_pagar"):
-            st.session_state["__menu_jump"] = "Pagar"
+            st.session_state["menu"] = "Pagar"
             st.rerun()
 
     st.divider()
@@ -223,8 +233,8 @@ if menu == "HOJE":
         st.dataframe(df_sexta, use_container_width=True, hide_index=True)
 
 # Jump helper
-if "__menu_jump" in st.session_state:
-    menu = st.session_state.pop("__menu_jump")
+# if "__menu_jump" in st.session_state:
+#     menu = st.session_state.pop("__menu_jump")
 
 # =========================
 # CADASTROS (mínimo, para testar rápido)
@@ -394,9 +404,11 @@ if menu == "Apontamentos":
                 st.rerun()
             except psycopg2.errors.UniqueViolation:
                 st.warning("Já existe apontamento para essa pessoa nesse dia nessa obra.")
+                st.stop()  # evita continuar e disparar queries no mesmo run
             except Exception as e:
                 st.error("Erro ao salvar apontamento.")
                 st.exception(e)
+                st.stop()  # evita continuar e disparar queries no mesmo run
 
         st.divider()
         st.markdown("### Apontamentos recentes")
@@ -521,3 +533,9 @@ if menu == "Pagar":
     st.markdown("### Todos os pagamentos pendentes (lista completa)")
     df_all = safe_query("select * from public.pagamentos_pendentes limit 200;")
     st.dataframe(df_all, use_container_width=True, hide_index=True)
+
+    st.divider()
+    st.markdown("### Pagamentos realizados (últimos 30 dias)")
+    df_pago = safe_query("select * from public.pagamentos_realizados_30d;")
+    st.dataframe(df_pago, use_container_width=True, hide_index=True)
+    
