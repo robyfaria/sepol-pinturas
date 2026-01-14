@@ -126,12 +126,12 @@ if menu == "HOJE":
     colL1, colL2, colR1, colR2 = st.columns([3, 3, 3, 3])
 
     with colL1:
-        st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos (hoje)")
+        st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos")
         st.caption(f"Apontamentos hoje: {qtd_ap_hoje}")
         st.button("Ir para Apontamentos", on_click=nav, args=("Apontamentos",), type="primary", use_container_width=True)
 
     with colL2:
-        st.markdown(f"### {badge(qtd_pg_sem > 0)} 2) Gerar pagamentos da semana")
+        st.markdown(f"### {badge(qtd_pg_sem > 0)} 2) Gerar pagamentos")
         st.caption(f"Semana: {segunda.strftime('%d/%m/%Y')} → {sexta.strftime('%d/%m/%Y')}")
         st.button("Ir para Gerar Pagamentos", on_click=nav, args=("Gerar Pagamentos",), use_container_width=True)
 
