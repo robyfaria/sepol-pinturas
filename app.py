@@ -128,7 +128,7 @@ if menu == "HOJE":
     def badge(ok: bool):
         return "✅" if ok else "⚠️"
 
-    colX, colY, colZ, colW = st.columns([2, 3])
+    colX, colY, colZ, colW = st.columns([2, 2, 2, 2])
 
     with colX:
         st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos (hoje)")
