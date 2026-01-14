@@ -141,7 +141,7 @@ if menu == "HOJE":
         st.button("Ir para Pagar", on_click=nav, args=("Pagar",), use_container_width=True)
 
     with colR2:
-        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (sáb/dom)")
+        st.markdown(f"### {badge(qtd_extras == 0)} 4) Extras (sáb/dom)")
         st.caption(f"Extras pendentes: {qtd_extras}")
         st.button("Ir para Pagar (extras)", on_click=nav, args=("Pagar",), use_container_width=True)
 
