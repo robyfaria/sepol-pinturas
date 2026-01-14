@@ -156,12 +156,15 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     c = canvas.Canvas(buf, pagesize=A4)
     w, h = A4
     r = df_head.iloc[0]
-
     y = h - 50
+    
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, f"SEPOL - Orçamento #{r['orcamento_id']}")
-    c.drawString(35, y, f"{r['titulo']}  - Status: {r['status']}")
-    y -= 25
+    c.drawString(50, y, f"SEPOL - Orçamento #{r['orcamento_id']}")    
+    y -= 18
+    
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, f"{r['titulo']}  - Status: {r['status']}")
+    y -= 50
 
     c.setFont("Helvetica", 10)
     c.drawString(50, y, f"Cliente: {r['cliente_nome']}  Tel: {r.get('cliente_tel') or ''}")
