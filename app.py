@@ -125,6 +125,29 @@ def go(dest):
     st.session_state["menu"] = dest
     st.session_state["menu_widget"] = dest  # mantém o selectbox sincronizado
 
+def badge_status_orc(stt: str) -> str:
+    stt = (stt or "").upper()
+    return {
+        "RASCUNHO": "📝 RASCUNHO",
+        "EMITIDO": "📤 EMITIDO",
+        "APROVADO": "✅ APROVADO",
+        "REPROVADO": "❌ REPROVADO",
+        "CANCELADO": "🚫 CANCELADO",
+    }.get(stt, f"• {stt}")
+
+def msg_status_orc(stt: str):
+    stt = (stt or "").upper()
+    if stt == "RASCUNHO":
+        st.info("RASCUNHO: pode editar fases/serviços e recalcular.")
+    elif stt == "EMITIDO":
+        st.warning("EMITIDO: orçamento já foi enviado. Você pode REABRIR se precisar corrigir.")
+    elif stt == "APROVADO":
+        st.success("APROVADO: este orçamento vira referência da obra (pagamentos/recebimentos).")
+    elif stt == "REPROVADO":
+        st.error("REPROVADO: não gera fluxo financeiro.")
+    elif stt == "CANCELADO":
+        st.error("CANCELADO: não utilizar. Crie um novo orçamento se necessário.")
+
 # ======================================================
 # PDF
 # ======================================================
@@ -148,10 +171,6 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     y -= 14
     c.drawString(50, y, f"Orçamento #{r['orcamento_id']} - {r['titulo']}  Status: {r['status']}")
     y -= 18
-
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, f"TOTAL GERAL: {brl(r['valor_total'])}")
-    y -= 20
 
     # Agrupa por fase
     if df_itens.empty:
@@ -201,6 +220,10 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
             y -= 12
 
         y -= 10
+            
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(50, y, f"TOTAL GERAL: {brl(r['valor_total'])}")
+    y -= 20
 
     c.showPage()
     c.save()
@@ -519,13 +542,14 @@ if menu == "CLIENTES":
                     st.stop()
                 # Mostra sempre (porque em form não re-renderiza condicional)
                 ids = [int(x) for x in df_ind_ativos["id"].tolist()]
-                
+
+            map_ind_cli = dict(zip(df_ind_ativos["id"], df_ind_ativos["nome"]))
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Clientes - Apenas se Origem = INDICADO)",
-                    options=[None] + ids,
+                    options=[None] + ids,  # sempre lista python
                     index=0,
-                    format_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
+                    format_func=lambda x: "—" if x is None else map_ind_cli.get(int(x), f"ID {x}"),
                     key="edit_cli_indicacao_id",
                     disabled=(len(ids)==0),
                 )
@@ -695,7 +719,7 @@ if menu == "SERVIÇOS":
         with c1:
             nome = st.text_input("Nome do serviço", value=(row["nome"] if row is not None else ""))
         with c2:
-            unidade_opts = ["UN", "M2", "ML", "H", "DIA"]
+            unidade_opts = ["UN", "M2", "L", "H", "DIA"]
             unidade = st.selectbox(
                 "Unidade",
                 unidade_opts,
@@ -1122,15 +1146,54 @@ if menu == "OBRAS":
                 key="orc_sel_box",
             )
             st.session_state["orc_sel"] = sel
+
+            st.divider()
+            st.markdown("### 🔎 Orçamento selecionado")
+            
+            orc_sel = int(st.session_state["orc_sel"])
+            df_sel = safe_df("""
+                select id, titulo, status, criado_em, aprovado_em, valor_total
+                from public.orcamentos
+                where id=%s;
+            """, (orc_sel,))
+            
+            if not df_sel.empty:
+                rr = df_sel.iloc[0]
+                cA, cB, cC = st.columns([5,2,2])
+                with cA:
+                    st.write(f"**#{int(rr['id'])} — {rr['titulo']}**")
+                    st.caption(f"{badge_status_orc(rr['status'])}")
+                with cB:
+                    st.metric("Total", brl(rr.get("valor_total", 0)))
+                with cC:
+                    st.write("Ações")
+                    if st.button("Recalcular", key=f"sel_recalc_{orc_sel}", use_container_width=True):
+                        exec_sql("select public.fn_recalcular_orcamento(%s);", (orc_sel,))
+                        st.success("Recalculado.")
+                        st.rerun()
+                    if st.button("Emitir (PDF)", key=f"sel_emit_{orc_sel}", type="primary", use_container_width=True,
+                                 disabled=(rr["status"] in ("APROVADO","REPROVADO","CANCELADO"))):
+                        exec_sql("select public.fn_recalcular_orcamento(%s);", (orc_sel,))
+                        exec_sql("update public.orcamentos set status='EMITIDO' where id=%s;", (orc_sel,))
+                        st.success("Emitido. Role para baixar o PDF na lista ou clique novamente no orçamento.")
+                        st.rerun()
+            
+                msg_status_orc(rr["status"])
+
     
             # grid simples 60+
             for _, r in df_orc.iterrows():
                 rid = int(r["id"])
+                status_atual = r["status"]
+                selecionado = (rid == st.session_state.get("orc_sel"))
                 c1, c2, c3, c4, c5 = st.columns([5,2,2,2,2])
                 
                 with c1:
-                    st.write(f"**#{rid} — {r['titulo']}**")
-                    st.caption(f"Status: {r['status']} • Criado: {str(r['criado_em'])[:19]}")
+                    titulo = r["titulo"]
+                    st.write(f"**#{rid} — {titulo}**")
+                    st.caption(f"{badge_status_orc(status_atual)}  •  Criado: {str(r['criado_em'])[:19]}")
+                    if selecionado:
+                        st.success("✅ Este é o orçamento selecionado")
                     
                 with c2:
                     if st.button("Selecionar", key=f"orc_pick_{rid}", use_container_width=True):
@@ -1247,7 +1310,7 @@ if menu == "OBRAS":
                         st.download_button(
                             "⬇️ Baixar PDF do Orçamento",
                             data=pdf_bytes,
-                            file_name=f"orcamento_{rid}.pdf",
+                            file_name=f"SEPOL_Orcamento_{rid}.pdf",
                             mime="application/pdf",
                             use_container_width=True,
                             key=f"orc_pdf_{rid}"
@@ -1401,10 +1464,12 @@ if menu == "OBRAS":
                         st.stop()
     
         st.divider()
-        st.markdown("#### Lista de fases")
+        st.markdown("#### Lista de fases")        
         if df_fases.empty:
             st.info("Nenhuma fase ainda.")
-        else:
+        else:            
+            total_orc = float(df_fases["valor_fase"].sum()) if "valor_fase" in df_fases.columns else 0.0
+            st.success(f"Total das Fases neste Orçamento: {brl(total_orc)}")
             for _, rr in df_fases.iterrows():
                 fid = int(rr["id"])
                 c1, c2, c3, c4, c5 = st.columns([1,4,2,2,2])
