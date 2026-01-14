@@ -209,11 +209,11 @@ if menu == "PROFISSIONAIS":
                         st.rerun()
                 with b2:
                     if rr["ativo"]:
-                        if st.button("Inativar", key=f"p_inat_{int(rr['id'])}", use_container_width=True):
+                        if st.button("INATIVAR ⛔", key=f"p_inat_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.pessoas set ativo=false where id=%s;", (int(rr["id"]),))
                             st.rerun()
                     else:
-                        if st.button("Ativar", key=f"p_at_{int(rr['id'])}", use_container_width=True):
+                        if st.button("ATIVAR ✅", key=f"p_at_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.pessoas set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
 
@@ -319,11 +319,11 @@ if menu == "CLIENTES":
                         st.rerun()
                 with b2:
                     if rr["ativo"]:
-                        if st.button("Inativar", key=f"ind_inat_{int(rr['id'])}", use_container_width=True):
+                        if st.button("INATIVAR ⛔", key=f"ind_inat_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.indicacoes set ativo=false where id=%s;", (int(rr["id"]),))
                             st.rerun()
                     else:
-                        if st.button("Ativar", key=f"ind_at_{int(rr['id'])}", use_container_width=True):
+                        if st.button("ATIVAR ✅", key=f"ind_at_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.indicacoes set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
 
@@ -464,7 +464,7 @@ if menu == "CLIENTES":
 
     st.markdown("### 📋 Lista de clientes")
     df_cli = safe_df("""
-        select c.id, c.nome, c.telefone, c.origem, c.ativo,
+        select c.id, c.nome, c.telefone, c.endereco, c.origem, c.ativo,
                i.nome as indicacao_nome
         from public.clientes c
         left join public.indicacoes i on i.id=c.indicacao_id
@@ -480,6 +480,8 @@ if menu == "CLIENTES":
                 st.write(f"**{rr['nome']}** — {rr['origem']} — {rr['indicacao_nome'] or ''}")
                 if rr["telefone"]:
                     st.caption(rr["telefone"])
+                if rr["endereco"]:
+                    st.caption(rr["endereco"])
             with colB:
                 st.write("ATIVO ✅" if rr["ativo"] else "INATIVO ⛔")
             with colC:
@@ -490,11 +492,11 @@ if menu == "CLIENTES":
                         st.rerun()
                 with b2:
                     if rr["ativo"]:
-                        if st.button("Inativar", key=f"cli_inat_{int(rr['id'])}", use_container_width=True):
+                        if st.button("INATIVAR ⛔", key=f"cli_inat_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.clientes set ativo=false where id=%s;", (int(rr["id"]),))
                             st.rerun()
                     else:
-                        if st.button("Ativar", key=f"cli_at_{int(rr['id'])}", use_container_width=True):
+                        if st.button("ATIVAR ✅", key=f"cli_at_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.clientes set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
 
@@ -713,10 +715,10 @@ if menu == "OBRAS":
                         st.rerun()
                 with b2:
                     if rr["ativo"]:
-                        if st.button("Inativar", key=f"obra_inat_{int(rr['id'])}", use_container_width=True):
+                        if st.button("INATIVAR ⛔", key=f"obra_inat_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.obras set ativo=false where id=%s;", (int(rr["id"]),))
                             st.rerun()
                     else:
-                        if st.button("Ativar", key=f"obra_at_{int(rr['id'])}", use_container_width=True):
+                        if st.button("ATIVAR ✅", key=f"obra_at_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.obras set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
