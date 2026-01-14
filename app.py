@@ -77,7 +77,6 @@ def to_int(x):
 def go(dest):
     st.session_state["menu"] = dest
     st.session_state["menu_widget"] = dest  # mantém o selectbox sincronizado
-    st.rerun()
 
 # ======================================================
 # LOGIN
@@ -387,9 +386,8 @@ if menu == "CLIENTES":
                     st.error(f"Erro: coluna 'id' não veio na consulta. Colunas disponíveis: {list(df_ind_ativos.columns)}")
                     st.stop()
                 # Mostra sempre (porque em form não re-renderiza condicional)
-                ids = df_ind_ativos["id"].astype(int).tolist()                
-            
-            indicacao_id = None
+                ids = [int(x) for x in df_ind_ativos["id"].tolist()]
+                
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Clientes - Apenas se Origem = INDICADO)",
@@ -698,14 +696,13 @@ if menu == "OBRAS":
                 if "id" not in df_ind_ativos.columns:
                     st.error(f"Erro: coluna 'id' não veio na consulta. Colunas disponíveis: {list(df_ind_ativos.columns)}")
                     st.stop()
-                # Mostra sempre (porque em form não re-renderiza condicional)
-                ids = df_ind_ativos["id"].astype(int).tolist()     
+                # Mostra sempre (porque em form não re-renderiza condicional)   
+                ids = [int(x) for x in df_ind_ativos["id"].tolist()]
 
-            indicacao_id = None
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Cliente Rápido - Apenas se Origem = INDICADO)",
-                    options=[None] + ids,
+                    options=[None] + ids,  # sempre lista python
                     index=0,
                     fomart_func=lambda x: df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0],
                     key="obra_cli_indicacao_id",
