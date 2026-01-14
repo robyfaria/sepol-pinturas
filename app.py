@@ -74,6 +74,11 @@ def to_int(x):
     except Exception:
         return None
 
+def go(dest):
+    st.session_state["menu"] = dest
+    st.session_state["menu_widget"] = dest  # mantém o selectbox sincronizado
+    st.rerun()
+
 # ======================================================
 # LOGIN
 # ======================================================
@@ -96,16 +101,24 @@ if not st.session_state["usuario"]:
 # ======================================================
 # MENU
 # ======================================================
-if "menu" not in st.session_state:
-    st.session_state["menu"] = "HOJE"
-
 with st.sidebar:
     st.markdown(f"👤 {st.session_state['usuario']}")
-    st.selectbox(
-        "Menu",
-        ["HOJE", "PROFISSIONAIS", "CLIENTES", "OBRAS", "APONTAMENTOS", "FINANCEIRO"],
-        key="menu",
-    )
+    
+    MENU_OPTS = ["HOME", "PROFISSIONAIS", "CLIENTES", "SERVIÇOS", "OBRAS", "APONTAMENTOS", "FINANCEIRO"]
+    
+    if "menu" not in st.session_state:
+        st.session_state["menu"] = "HOME"
+    if "menu_widget" not in st.session_state:
+        st.session_state["menu_widget"] = st.session_state["menu"]
+    
+    # widget controla "menu_widget"
+    st.selectbox("Menu", MENU_OPTS, key="menu_widget")
+    
+    # sincroniza: se usuário mudou no widget → atualiza menu
+    if st.session_state["menu_widget"] != st.session_state["menu"]:
+        st.session_state["menu"] = st.session_state["menu_widget"]
+        st.rerun()
+
     if st.button("Sair"):
         st.session_state["usuario"] = None
         st.rerun()
@@ -389,7 +402,7 @@ if menu == "CLIENTES":
                     "Quem indicou (apenas se Origem = INDICADO)",
                     opcoes,
                     format_func=lambda x: "—" if x is None else indic_fmt(x),
-                    key="edit_cli_indicacao_id",
+                    key="edit_cli_indicacao_id"
                 )
             else:
                 st.info("Cadastre uma Indicação em Cadastros → Indicações (ou use Cliente Próprio).")
@@ -454,7 +467,7 @@ if menu == "CLIENTES":
                 opcoes,
                 index=idx,
                 format_func=lambda x: "—" if x is None else indic_fmt(x),
-                key="cli_ind_edit_any",
+                key="cli_ind_edit_any"
             )
 
             b1, b2 = st.columns(2)
@@ -530,6 +543,121 @@ if menu == "CLIENTES":
                             st.rerun()
 
 # ======================================================
+# SERVIÇOS + CATÁLOGO (V1.5: form + modo edição)
+# ======================================================
+if menu == "SERVIÇOS":
+    st.subheader("🏗️ Serviços (catálogo)")
+
+    if "edit_servico_id" not in st.session_state:
+        st.session_state["edit_servico_id"] = None
+
+    edit_id = st.session_state["edit_servico_id"]
+
+    # carregar registro para edição
+    row = None
+    if edit_id:
+        df_one = safe_df("select * from public.servicos where id=%s;", (int(edit_id),))
+        if not df_one.empty:
+            row = df_one.iloc[0]
+        else:
+            st.session_state["edit_servico_id"] = None
+            edit_id = None
+
+    st.markdown("#### " + ("Editar serviço" if edit_id else "Novo serviço"))
+
+    # form (não mexe em session_state de widget)
+    with st.form("servico_form", clear_on_submit=(edit_id is None)):
+        c1, c2 = st.columns([5, 2])
+        with c1:
+            nome = st.text_input("Nome do serviço", value=(row["nome"] if row is not None else ""))
+        with c2:
+            unidade_opts = ["UN", "M2", "ML", "H", "DIA"]
+            unidade = st.selectbox(
+                "Unidade",
+                unidade_opts,
+                index=(unidade_opts.index(row["unidade"]) if row is not None else 0),
+            )
+
+        b1, b2, b3 = st.columns([2,2,2])
+
+        with b1:
+            salvar = st.form_submit_button("Salvar", type="primary", use_container_width=True)
+
+        with b2:
+            cancelar = st.form_submit_button("Cancelar edição", use_container_width=True, disabled=(not bool(edit_id)))
+
+        with b3:
+            limpar = st.form_submit_button("Limpar", use_container_width=True)
+
+        if salvar:
+            if not nome.strip():
+                st.warning("Informe o nome do serviço.")
+                st.stop()
+
+            try:
+                if not edit_id:
+                    exec_sql(
+                        "insert into public.servicos (nome, unidade, ativo) values (%s,%s,true);",
+                        (nome.strip(), unidade),
+                    )
+                    st.success("Serviço cadastrado!")
+                else:
+                    exec_sql(
+                        "update public.servicos set nome=%s, unidade=%s where id=%s;",
+                        (nome.strip(), unidade, int(edit_id)),
+                    )
+                    st.success("Serviço atualizado!")
+                    st.session_state["edit_servico_id"] = None
+
+                st.rerun()
+            except Exception as e:
+                st.error("Falha ao salvar (talvez serviço com mesmo nome).")
+                st.exception(e)
+                st.stop()
+
+        if cancelar:
+            st.session_state["edit_servico_id"] = None
+            st.rerun()
+
+        if limpar:
+            st.session_state["edit_servico_id"] = None
+            st.rerun()
+
+    st.divider()
+    st.markdown("#### Lista")
+
+    df = safe_df("select id, nome, unidade, ativo, criado_em from public.servicos order by nome;")
+    if df.empty:
+        st.info("Nenhum serviço cadastrado.")
+    else:
+        for _, rr in df.iterrows():
+            sid = int(rr["id"])
+            colA, colB, colC, colD, colE = st.columns([5,2,2,2,2])
+            with colA:
+                st.write(f"**{rr['nome']}**")
+            with colB:
+                st.write(rr["unidade"])
+            with colC:
+                st.write("ATIVO" if rr["ativo"] else "INATIVO")
+            with colD:
+                if st.button("Editar", key=f"serv_edit_{sid}", use_container_width=True):
+                    st.session_state["edit_servico_id"] = sid
+                    st.rerun()
+            with colE:
+                bE1, bE2 = st.columns(2)
+                with bE1:
+                    if rr["ativo"]:
+                        if st.button("Inativar", key=f"serv_inat_{sid}", use_container_width=True):
+                            exec_sql("update public.servicos set ativo=false where id=%s;", (sid,))
+                            st.rerun()
+                    else:
+                        if st.button("Ativar", key=f"serv_at_{sid}", use_container_width=True):
+                            exec_sql("update public.servicos set ativo=true where id=%s;", (sid,))
+                            st.rerun()
+                with bE2:
+                    st.write("")  # só pra manter alinhamento
+
+# ======================================================
 # OBRAS (estável: form + modo edição + cliente rápido com origem/indicação)
 # ======================================================
 if menu == "OBRAS":
@@ -592,7 +720,7 @@ if menu == "OBRAS":
                     "Quem indicou (apenas se Origem = INDICADO)",
                     opcoes,
                     format_func=lambda x: "—" if x is None else indic_fmt(x),
-                    key="obra_cli_indicacao_id",
+                    key="obra_cli_indicacao_id"
                 )
             else:
                 st.info("Cadastre uma Indicação em Cadastros → Indicações (ou use Cliente Próprio).")
@@ -813,7 +941,7 @@ if menu == "OBRAS":
 
     obra_id = int(st.session_state["obra_sel"])
 
-    tabs = st.tabs(["Orçamentos", "Fases do Orçamento", "Recebimentos"])
+    tabs = st.tabs(["Orçamentos", "Fases do Orçamento", "Recebimentos", "Serviços"])
 
     with tabs[0]:
         st.markdown("### 📄 Orçamentos da Obra")
@@ -1073,6 +1201,190 @@ if menu == "OBRAS":
                         st.rerun()
 
     with tabs[2]:
+        st.markdown("### 🧾 Serviços da Fase (Orçamento)")
+    
+        orc_id = st.session_state.get("orc_sel")
+        if not orc_id:
+            st.info("Selecione um orçamento na aba Orçamentos.")
+            st.stop()
+    
+        # fases do orçamento
+        df_fases = safe_df("""
+            select id, ordem, nome_fase, status, valor_fase
+            from public.obra_fases
+            where orcamento_id=%s
+            order by ordem;
+        """, (int(orc_id),))
+    
+        if df_fases.empty:
+            st.info("Crie fases primeiro na aba Fases do Orçamento.")
+            st.stop()
+    
+        # catálogo serviços ativos
+        df_serv = safe_df("""
+            select id, nome, unidade
+            from public.servicos
+            where ativo=true
+            order by nome;
+        """)
+    
+        if df_serv.empty:
+            st.warning("Cadastre serviços primeiro em Cadastros → Serviços.")
+            st.stop()
+    
+        # selecionar fase
+        fase_ids = df_fases["id"].astype(int).tolist()
+        if "fase_sel" not in st.session_state or st.session_state["fase_sel"] not in fase_ids:
+            st.session_state["fase_sel"] = fase_ids[0]
+    
+        fase_sel = st.selectbox(
+            "Selecione a fase",
+            options=fase_ids,
+            index=fase_ids.index(st.session_state["fase_sel"]),
+            format_func=lambda x: f"{int(df_fases.loc[df_fases['id']==x,'ordem'].iloc[0])} - {df_fases.loc[df_fases['id']==x,'nome_fase'].iloc[0]}",
+            key="fase_sel_box"
+        )
+        st.session_state["fase_sel"] = fase_sel
+        obra_fase_id = int(fase_sel)
+    
+        st.caption("Dica 60+: cadastre aqui os serviços planejados. Isso monta o orçamento por fase.")
+    
+        # adicionar serviço na fase
+        st.markdown("#### ➕ Adicionar serviço na fase")
+        with st.form("add_servico_fase", clear_on_submit=True):
+            serv_ids = df_serv["id"].astype(int).tolist()
+            serv_id = st.selectbox(
+                "Serviço",
+                options=serv_ids,
+                format_func=lambda x: f"{df_serv.loc[df_serv['id']==x,'nome'].iloc[0]} ({df_serv.loc[df_serv['id']==x,'unidade'].iloc[0]})"
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                qtd = st.number_input("Quantidade", min_value=0.01, step=1.0, value=1.0)
+            with c2:
+                vunit = st.number_input("Valor unitário (R$)", min_value=0.0, step=50.0, value=0.0)
+    
+            obs = st.text_input("Observação (opcional)")
+    
+            add = st.form_submit_button("Adicionar", type="primary", use_container_width=True)
+            if add:
+                try:
+                    exec_sql("""
+                        insert into public.orcamento_fase_servicos
+                          (orcamento_id, obra_fase_id, servico_id, quantidade, valor_unit, observacao)
+                        values (%s,%s,%s,%s,%s,%s);
+                    """, (int(orc_id), obra_fase_id, int(serv_id), float(qtd), float(vunit), obs.strip() or None))
+                    st.success("Serviço adicionado na fase.")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Falha ao adicionar (talvez serviço já exista nessa fase).")
+                    st.exception(e)
+                    st.stop()
+    
+        # lista serviços na fase
+        st.divider()
+        st.markdown("#### Lista de serviços da fase")
+    
+        df_it = safe_df("""
+            select
+              ofs.id,
+              s.nome as servico,
+              s.unidade,
+              ofs.quantidade,
+              ofs.valor_unit,
+              ofs.valor_total,
+              ofs.observacao
+            from public.orcamento_fase_servicos ofs
+            join public.servicos s on s.id=ofs.servico_id
+            where ofs.orcamento_id=%s and ofs.obra_fase_id=%s
+            order by s.nome;
+        """, (int(orc_id), obra_fase_id))
+    
+        if df_it.empty:
+            st.info("Nenhum serviço adicionado nesta fase.")
+        else:
+            total_fase = float(df_it["valor_total"].sum()) if "valor_total" in df_it.columns else 0.0
+            st.success(f"Total dos serviços nesta fase: {brl(total_fase)}")
+    
+            # editar/excluir por linha (simples)
+            for _, r in df_it.iterrows():
+                iid = int(r["id"])
+                col1, col2, col3, col4, col5, col6 = st.columns([4,1,1,2,2,2])
+                with col1:
+                    st.write(f"**{r['servico']}**")
+                    if r.get("observacao"):
+                        st.caption(r["observacao"])
+                with col2:
+                    st.write(r["unidade"])
+                with col3:
+                    st.write(float(r["quantidade"]))
+                with col4:
+                    st.write(brl(r["valor_unit"]))
+                with col5:
+                    st.write(brl(r["valor_total"]))
+                with col6:
+                    bE, bX = st.columns(2)
+                    with bE:
+                        if st.button("Editar", key=f"ofs_edit_{iid}", use_container_width=True):
+                            st.session_state["edit_ofs_id"] = iid
+                            st.rerun()
+                    with bX:
+                        if st.button("Remover", key=f"ofs_del_{iid}", use_container_width=True):
+                            exec_sql("delete from public.orcamento_fase_servicos where id=%s;", (iid,))
+                            st.success("Removido.")
+                            st.rerun()
+    
+        # editor inline do item selecionado
+        if "edit_ofs_id" not in st.session_state:
+            st.session_state["edit_ofs_id"] = None
+    
+        edit_ofs_id = st.session_state.get("edit_ofs_id")
+        if edit_ofs_id:
+            df_one = safe_df("""
+                select ofs.*, s.nome as servico_nome, s.unidade
+                from public.orcamento_fase_servicos ofs
+                join public.servicos s on s.id=ofs.servico_id
+                where ofs.id=%s;
+            """, (int(edit_ofs_id),))
+    
+            if df_one.empty:
+                st.session_state["edit_ofs_id"] = None
+                st.rerun()
+    
+            rr = df_one.iloc[0]
+            st.divider()
+            st.markdown(f"#### ✏️ Editar item — {rr['servico_nome']} ({rr['unidade']})")
+    
+            with st.form("ofs_edit_form", clear_on_submit=False):
+                c1, c2 = st.columns(2)
+                with c1:
+                    qtd2 = st.number_input("Quantidade", min_value=0.01, step=1.0, value=float(rr["quantidade"]))
+                with c2:
+                    vunit2 = st.number_input("Valor unitário (R$)", min_value=0.0, step=50.0, value=float(rr["valor_unit"]))
+                obs2 = st.text_input("Observação", value=(rr["observacao"] or ""))
+    
+                b1, b2 = st.columns(2)
+                with b1:
+                    salvar = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+                with b2:
+                    cancelar = st.form_submit_button("Cancelar", use_container_width=True)
+    
+                if salvar:
+                    exec_sql("""
+                        update public.orcamento_fase_servicos
+                        set quantidade=%s, valor_unit=%s, observacao=%s
+                        where id=%s;
+                    """, (float(qtd2), float(vunit2), obs2.strip() or None, int(edit_ofs_id)))
+                    st.session_state["edit_ofs_id"] = None
+                    st.success("Atualizado.")
+                    st.rerun()
+    
+                if cancelar:
+                    st.session_state["edit_ofs_id"] = None
+                    st.rerun()
+
+    
+    with tabs[3]:
         st.markdown("### 💳 Recebimentos (por fase)")
     
         orc_id = st.session_state.get("orc_sel")
@@ -1202,15 +1514,15 @@ if menu == "HOJE":
     st.markdown("### Ações rápidas")
     a1, a2, a3 = st.columns(3)
     with a1:
-        if st.button("Ir para Apontamentos", type="primary", use_container_width=True):
+        if st.button("Ir para Apontamentos", type="primary", on_click=go, args=("APONTAMENTOS",), use_container_width=True):
             st.session_state["menu"] = "APONTAMENTOS"
             st.rerun()
     with a2:
-        if st.button("Ir para Financeiro", use_container_width=True):
+        if st.button("Ir para Financeiro", on_click=go, args=("FINANCEIRO",), use_container_width=True):            
             st.session_state["menu"] = "FINANCEIRO"
             st.rerun()
     with a3:
-        if st.button("Ir para Obras", use_container_width=True):
+        if st.button("Ir para Obras", on_click=go, args=("OBRAS",), use_container_width=True):
             st.session_state["menu"] = "OBRAS"
             st.rerun()
 
