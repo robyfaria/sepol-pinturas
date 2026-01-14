@@ -164,7 +164,7 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     
     c.setFont("Helvetica-Bold", 12)
     c.drawString(50, y, f"{r['titulo']}  - Status: {r['status']}")
-    y -= 50
+    y -= 14
 
     c.setFont("Helvetica", 10)
     c.drawString(50, y, f"Cliente: {r['cliente_nome']}  Tel: {r.get('cliente_tel') or ''}")
@@ -174,7 +174,7 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     c.drawString(50, y, f"Endereço: {r.get('endereco_obra') or ''}")
     y -= 14
     
-    y -= 18
+    y -= 24
 
     # Agrupa por fase
     if df_itens.empty:
@@ -226,16 +226,11 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
 
         y -= 14
 
+    y -= 14
     c.setFont("Helvetica-Bold", 11)
     c.drawString(50, y, f"TOTAL BRUTO: {brl(r['valor_total'])}")
-    y -= 14
-    c.drawString(50, y, f"DESCONTO: {brl(r['desconto_valor'])}")
-    y -= 14
-    c.drawString(50, y, f"TOTAL FINAL: {brl(r['valor_total_final'])}")
-    y -= 20
-
-    # c.setFont("Helvetica-Bold", 11)
-    # c.drawString(50, y, f"TOTAL GERAL: {brl(r['valor_total'])}")
+    c.drawString(150, y, f"DESCONTO: {brl(r['desconto_valor'])}")
+    c.drawString(250, y, f"TOTAL FINAL: {brl(r['valor_total_final'])}")
     y -= 20
 
     c.showPage()
