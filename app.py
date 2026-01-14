@@ -90,7 +90,83 @@ if menu == "HOJE":
         c7.metric("Extras pendentes (total)", brl(row["extras_pendentes_total"]))
 
     st.divider()
+    
+    # =========================
+    # Painel "HOJE eu preciso fazer" (modo 60+)
+    # =========================
+    st.markdown("## HOJE eu preciso fazer")
 
+    hoje = date.today()
+    segunda = monday_of_week(hoje)
+    sexta = segunda + timedelta(days=4)
+
+    # 1) Apontamentos de hoje
+    df_ap_hoje = safe_query("select count(*) as qtd from public.apontamentos where data = current_date;")
+    qtd_ap_hoje = int(df_ap_hoje.iloc[0]["qtd"]) if not df_ap_hoje.empty else 0
+
+    # 2) Pagamentos semanais da semana atual (se existe, já foi gerado)
+    df_pg_sem = safe_query(
+        """
+        select count(*) as qtd
+        from public.pagamentos
+        where tipo='SEMANAL'
+          and referencia_inicio=%s
+          and referencia_fim=%s;
+        """,
+        (segunda, sexta),
+    )
+    qtd_pg_sem = int(df_pg_sem.iloc[0]["qtd"]) if not df_pg_sem.empty else 0
+
+    # 3) Pendências para sexta
+    df_para_sexta = safe_query("select count(*) as qtd from public.pagamentos_para_sexta;")
+    qtd_para_sexta = int(df_para_sexta.iloc[0]["qtd"]) if not df_para_sexta.empty else 0
+
+    # 4) Extras pendentes
+    df_extras = safe_query("select count(*) as qtd from public.pagamentos_extras_pendentes;")
+    qtd_extras = int(df_extras.iloc[0]["qtd"]) if not df_extras.empty else 0
+
+    def badge(ok: bool):
+        return "✅" if ok else "⚠️"
+
+    colX, colY = st.columns([2, 3])
+
+    with colX:
+        st.markdown(f"### {badge(qtd_ap_hoje > 0)} 1) Lançar apontamentos (hoje)")
+        st.caption(f"Hoje: {hoje.strftime('%d/%m/%Y')} • Apontamentos lançados: {qtd_ap_hoje}")
+        if st.button("Ir para Apontamentos", type="primary", use_container_width=True, key="todo_go_ap"):
+            st.session_state["__menu_jump"] = "Apontamentos"
+            st.rerun()
+
+        st.markdown(f"### {badge(qtd_pg_sem > 0)} 2) Gerar pagamentos da semana")
+        st.caption(f"Semana: {segunda.strftime('%d/%m/%Y')} → {sexta.strftime('%d/%m/%Y')} • Gerado: {qtd_pg_sem}")
+        if st.button("Ir para Gerar Pagamentos", use_container_width=True, key="todo_go_gp"):
+            st.session_state["__menu_jump"] = "Gerar Pagamentos"
+            st.rerun()
+
+    with colY:
+        st.markdown(f"### {badge(qtd_para_sexta == 0)} 3) Pagar na sexta")
+        if qtd_para_sexta == 0:
+            st.success("Nada pendente para a próxima sexta.")
+        else:
+            st.warning(f"Pendências para sexta: {qtd_para_sexta} pagamento(s).")
+        if st.button("Ir para Pagar", use_container_width=True, key="todo_go_pay1"):
+            st.session_state["__menu_jump"] = "Pagar"
+            st.rerun()
+
+        st.markdown(f"### {badge(qtd_extras == 0)} 4) Pagar extras (sábado/domingo)")
+        if qtd_extras == 0:
+            st.success("Sem extras pendentes.")
+        else:
+            st.warning(f"Extras pendentes: {qtd_extras} pagamento(s).")
+        if st.button("Ir para Pagar (extras)", use_container_width=True, key="todo_go_pay2"):
+            st.session_state["__menu_jump"] = "Pagar"
+            st.rerun()
+
+    st.divider()
+
+    # =========================
+    # AÇÕES RÁPIDAS
+    # =========================
     st.markdown("### Ações rápidas")
     a1, a2, a3 = st.columns(3)
     with a1:
