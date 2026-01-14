@@ -158,7 +158,7 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
 
     y = h - 50
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "SEPOL - Orçamento")
+    c.drawString(50, y, f"SEPOL - Orçamento #{r['orcamento_id']} - {r['titulo']}  Status: {r['status']}")
     y -= 25
 
     r = df_head.iloc[0]
@@ -169,7 +169,7 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     y -= 14
     c.drawString(50, y, f"Endereço: {r.get('endereco_obra') or ''}")
     y -= 14
-    c.drawString(50, y, f"Orçamento #{r['orcamento_id']} - {r['titulo']}  Status: {r['status']}")
+    
     y -= 18
 
     # Agrupa por fase
@@ -187,7 +187,8 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
             y = h - 50
 
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, y, f"Fase {int(ordem)} - {nome_fase}  |  Total fase: {brl(valor_fase)}")
+        # c.drawString(50, y, f"Fase {int(ordem)} - {nome_fase}  |  Total fase: {brl(valor_fase)}")
+        c.drawString(50, y, f"Fase {int(ordem)} - {nome_fase}")
         y -= 16
 
         # Cabeçalho da tabela
@@ -195,8 +196,8 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
         c.drawString(50, y, "Serviço")
         c.drawString(270, y, "Qtd")
         c.drawString(310, y, "Un")
-        c.drawString(340, y, "V.Unit")
-        c.drawString(430, y, "Total")
+        # c.drawString(340, y, "V.Unit")
+        # c.drawString(430, y, "Total")
         y -= 12
         c.setFont("Helvetica", 9)
 
@@ -205,8 +206,8 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
             serv = row.get("servico") or "-"
             qtd = row.get("quantidade")
             un = row.get("unidade") or ""
-            vunit = row.get("valor_unit")
-            vtot = row.get("valor_total")
+            # vunit = row.get("valor_unit")
+            # vtot = row.get("valor_total")
 
             if y < 90:
                 c.showPage()
@@ -215,14 +216,22 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
             c.drawString(50, y, str(serv)[:40])
             c.drawRightString(300, y, "" if pd.isna(qtd) else f"{float(qtd):.2f}")
             c.drawString(310, y, str(un))
-            c.drawRightString(410, y, "" if pd.isna(vunit) else brl(vunit))
-            c.drawRightString(520, y, "" if pd.isna(vtot) else brl(vtot))
+            # c.drawRightString(410, y, "" if pd.isna(vunit) else brl(vunit))
+            # c.drawRightString(520, y, "" if pd.isna(vtot) else brl(vtot))
             y -= 12
 
-        y -= 10
-            
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, y, f"TOTAL GERAL: {brl(r['valor_total'])}")
+        y -= 14
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, f"TOTAL BRUTO: {brl(r['valor_total'])}")
+    y -= 14
+    c.drawString(50, y, f"DESCONTO: {brl(r['desconto_valor'])}")
+    y -= 14
+    c.drawString(50, y, f"TOTAL FINAL: {brl(r['valor_total_final'])}")
+    y -= 20
+
+    # c.setFont("Helvetica-Bold", 11)
+    # c.drawString(50, y, f"TOTAL GERAL: {brl(r['valor_total'])}")
     y -= 20
 
     c.showPage()
@@ -1101,7 +1110,7 @@ if menu == "OBRAS":
         st.markdown("### 📄 Orçamentos da Obra")
     
         df_orc = safe_df("""
-            select id, titulo, status, criado_em, aprovado_em
+            select id, titulo, status, valor_total, desconto_total, valor_total_final, criado_em, aprovado_em
             from public.orcamentos
             where obra_id=%s
             order by id desc;
@@ -1115,6 +1124,8 @@ if menu == "OBRAS":
             with col2:
                 st.caption("Status inicial")
                 st.write("RASCUNHO")
+
+            
             criar = st.form_submit_button("Criar orçamento", type="primary", use_container_width=True)
             if criar:
                 if not tit.strip():
@@ -1152,7 +1163,7 @@ if menu == "OBRAS":
             
             orc_sel = int(st.session_state["orc_sel"])
             df_sel = safe_df("""
-                select id, titulo, status, criado_em, aprovado_em, valor_total
+                select id, titulo, status, criado_em, aprovado_em, valor_total, desconto_total, valor_total_final
                 from public.orcamentos
                 where id=%s;
             """, (orc_sel,))
@@ -1165,14 +1176,37 @@ if menu == "OBRAS":
                     st.caption(f"{badge_status_orc(rr['status'])}")
                 with cB:
                     st.metric("Total", brl(rr.get("valor_total", 0)))
+                    st.metric("Total", brl(rr.get("desconto_valor", 0)))
+                    st.metric("Total", brl(rr.get("valor_total_final", 0)))
                 with cC:
                     st.write("Ações")
+                    status_atual = rr["status"]
+                    travado_final = status_atual in ("APROVADO","REPROVADO","CANCELADO")
+                    
+                    st.markdown("#### Desconto (antes de emitir)")
+                    desc_novo = st.number_input(
+                        "Desconto em R$",
+                        min_value=0.0,
+                        step=50.0,
+                        value=float(rr.get("desconto_valor", 0) or 0),
+                        disabled=travado_final,
+                        key=f"desc_orc_{orc_sel}"
+                    )
+                    
+                    if st.button("Salvar desconto", use_container_width=True, disabled=travado_final):
+                        exec_sql("update public.orcamentos set desconto_valor=%s where id=%s;", (float(desc_novo), int(orc_sel)))
+                        exec_sql("select public.fn_recalcular_orcamento(%s);", (int(orc_sel),))
+                        st.success("Desconto aplicado e totais recalculados.")
+                        st.rerun()
+
                     if st.button("Recalcular", key=f"sel_recalc_{orc_sel}", use_container_width=True):
                         exec_sql("select public.fn_recalcular_orcamento(%s);", (orc_sel,))
                         st.success("Recalculado.")
                         st.rerun()
+                        
                     if st.button("Emitir (PDF)", key=f"sel_emit_{orc_sel}", type="primary", use_container_width=True,
                                  disabled=(rr["status"] in ("APROVADO","REPROVADO","CANCELADO"))):
+                        exec_sql("update public.orcamentos set desconto_valor=%s where id=%s;", (float(desc_novo), int(rid)))
                         exec_sql("select public.fn_recalcular_orcamento(%s);", (orc_sel,))
                         exec_sql("update public.orcamentos set status='EMITIDO' where id=%s;", (orc_sel,))
                         st.success("Emitido. Role para baixar o PDF na lista ou clique novamente no orçamento.")
@@ -1273,13 +1307,14 @@ if menu == "OBRAS":
                     # --- emitir (gera PDF) ---
                     if st.button("Emitir (gera PDF)", key=f"orc_emit_{rid}", type="primary", use_container_width=True, disabled=travado_final):
                         # recalcula + emite
+                        exec_sql("update public.orcamentos set desconto_valor=%s where id=%s;", (float(desc_novo), int(rid)))
                         exec_sql("select public.fn_recalcular_orcamento(%s);", (rid,))
                         exec_sql("update public.orcamentos set status='EMITIDO' where id=%s;", (rid,))
                     
                         df_head = safe_df(
                             """
                             select
-                              o.id as orcamento_id, o.titulo, o.status, o.valor_total,
+                              o.id as orcamento_id, o.titulo, o.status, o.valor_total, o.desconto_valor, o.valor_total_final,
                               ob.titulo as obra_titulo, ob.endereco_obra,
                               c.nome as cliente_nome, c.telefone as cliente_tel
                             from public.orcamentos o
