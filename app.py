@@ -1110,7 +1110,7 @@ if menu == "OBRAS":
         st.markdown("### 📄 Orçamentos da Obra")
     
         df_orc = safe_df("""
-            select id, titulo, status, valor_total, desconto_total, valor_total_final, criado_em, aprovado_em
+            select id, titulo, status, valor_total, desconto_valor, valor_total_final, criado_em, aprovado_em
             from public.orcamentos
             where obra_id=%s
             order by id desc;
@@ -1163,7 +1163,7 @@ if menu == "OBRAS":
             
             orc_sel = int(st.session_state["orc_sel"])
             df_sel = safe_df("""
-                select id, titulo, status, criado_em, aprovado_em, valor_total, desconto_total, valor_total_final
+                select id, titulo, status, criado_em, aprovado_em, valor_total, desconto_valor, valor_total_final
                 from public.orcamentos
                 where id=%s;
             """, (orc_sel,))
