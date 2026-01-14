@@ -6,6 +6,9 @@ import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import date, timedelta
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 # ======================================================
 # CONFIG
@@ -121,6 +124,87 @@ def to_int(x):
 def go(dest):
     st.session_state["menu"] = dest
     st.session_state["menu_widget"] = dest  # mantém o selectbox sincronizado
+
+# ======================================================
+# PDF
+# ======================================================
+def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+
+    y = h - 50
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, y, "SEPOL - Orçamento")
+    y -= 25
+
+    r = df_head.iloc[0]
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y, f"Cliente: {r['cliente_nome']}  Tel: {r.get('cliente_tel') or ''}")
+    y -= 14
+    c.drawString(50, y, f"Obra: {r['obra_titulo']}")
+    y -= 14
+    c.drawString(50, y, f"Endereço: {r.get('endereco_obra') or ''}")
+    y -= 14
+    c.drawString(50, y, f"Orçamento #{r['orcamento_id']} - {r['titulo']}  Status: {r['status']}")
+    y -= 18
+
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(50, y, f"TOTAL GERAL: {brl(r['valor_total'])}")
+    y -= 20
+
+    # Agrupa por fase
+    if df_itens.empty:
+        c.setFont("Helvetica", 10)
+        c.drawString(50, y, "Sem fases/serviços cadastrados.")
+        c.showPage()
+        c.save()
+        return buf.getvalue()
+
+    fases = df_itens.groupby(["fase_id","ordem","nome_fase","valor_fase"], dropna=False)
+    for (fase_id, ordem, nome_fase, valor_fase), g in fases:
+        if y < 120:
+            c.showPage()
+            y = h - 50
+
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(50, y, f"Fase {int(ordem)} - {nome_fase}  |  Total fase: {brl(valor_fase)}")
+        y -= 16
+
+        # Cabeçalho da tabela
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(50, y, "Serviço")
+        c.drawString(270, y, "Qtd")
+        c.drawString(310, y, "Un")
+        c.drawString(340, y, "V.Unit")
+        c.drawString(430, y, "Total")
+        y -= 12
+        c.setFont("Helvetica", 9)
+
+        # Linhas
+        for _, row in g.iterrows():
+            serv = row.get("servico") or "-"
+            qtd = row.get("quantidade")
+            un = row.get("unidade") or ""
+            vunit = row.get("valor_unit")
+            vtot = row.get("valor_total")
+
+            if y < 90:
+                c.showPage()
+                y = h - 50
+
+            c.drawString(50, y, str(serv)[:40])
+            c.drawRightString(300, y, "" if pd.isna(qtd) else f"{float(qtd):.2f}")
+            c.drawString(310, y, str(un))
+            c.drawRightString(410, y, "" if pd.isna(vunit) else brl(vunit))
+            c.drawRightString(520, y, "" if pd.isna(vtot) else brl(vtot))
+            y -= 12
+
+        y -= 10
+
+    c.showPage()
+    c.save()
+    return buf.getvalue()
 
 # ======================================================
 # LOGIN
@@ -1043,18 +1127,22 @@ if menu == "OBRAS":
             for _, r in df_orc.iterrows():
                 rid = int(r["id"])
                 c1, c2, c3, c4, c5 = st.columns([5,2,2,2,2])
+                
                 with c1:
                     st.write(f"**#{rid} — {r['titulo']}**")
                     st.caption(f"Status: {r['status']} • Criado: {str(r['criado_em'])[:19]}")
+                    
                 with c2:
                     if st.button("Selecionar", key=f"orc_pick_{rid}", use_container_width=True):
                         st.session_state["orc_sel"] = rid
                         st.session_state["edit_orc"] = rid
                         st.rerun()
+                        
                 with c3:
                     if st.button("Editar", key=f"orc_edit_{rid}", use_container_width=True):
                         st.session_state["edit_orc"] = rid
                         st.rerun()
+                        
                 with c4:
                     if st.button("Aprovar", key=f"orc_ap_{rid}", type="primary", use_container_width=True):
                         try:
@@ -1067,18 +1155,41 @@ if menu == "OBRAS":
                         except Exception as e:
                             st.error("Não foi possível aprovar. Talvez já exista outro orçamento APROVADO para esta obra.")
                             st.exception(e)
+                
                 with c5:
+                    status_atual = r["status"]
+
+                    # -----------------------------
+                    # STATUS EDITÁVEL (apenas RASCUNHO <-> EMITIDO)
+                    # -----------------------------
+                    status_editaveis = ["RASCUNHO", "EMITIDO"]
+                    
+                    # se já está finalizado, trava totalmente
+                    travado_final = status_atual in ("APROVADO", "REPROVADO", "CANCELADO")
+                    
+                    # se status atual não está nos editáveis (ex: aprovado),
+                    # mantemos só para exibição
+                    opcoes_status = status_editaveis if status_atual in status_editaveis else [status_atual]
+                    
                     novo_status = st.selectbox(
                         "Status",
-                        ["RASCUNHO","EMITIDO","REPROVADO","CANCELADO","APROVADO"],
-                        index=["RASCUNHO","EMITIDO","REPROVADO","CANCELADO","APROVADO"].index(r["status"]),
-                        key=f"orc_st_{rid}"
+                        opcoes_status,
+                        index=opcoes_status.index(status_atual),
+                        key=f"orc_st_{rid}",
+                        disabled=travado_final
                     )
-                    if st.button("Salvar status", key=f"orc_svst_{rid}", use_container_width=True):
+
+                    # --- salvar status ---
+                    if st.button("Salvar status", key=f"orc_svst_{rid}", use_container_width=True, disabled=travado_final or (novo_status == status_atual)):
                         # Aprovação deve passar pela regra do índice único
                         try:
                             exec_sql(
-                                "update public.orcamentos set status=%s, aprovado_em=case when %s='APROVADO' then current_date else aprovado_em end where id=%s;",
+                                """
+                                update public.orcamentos 
+                                set status=%s, 
+                                    aprovado_em=case when %s='APROVADO' then current_date else aprovado_em end 
+                                where id=%s;
+                                """,
                                 (novo_status, novo_status, rid),
                             )
                             st.success("Status atualizado.")
@@ -1086,6 +1197,69 @@ if menu == "OBRAS":
                         except Exception as e:
                             st.error("Falha ao atualizar status (provável conflito com orçamento APROVADO).")
                             st.exception(e)
+
+                    st.divider()
+                    st.caption("Ações do Orçamento")
+                    
+                    # --- recalcular (sempre útil antes de emitir) ---
+                    if st.button("Recalcular totais", key=f"orc_recalc_{rid}", use_container_width=True, disabled=travado_final):
+                        exec_sql("select public.fn_recalcular_orcamento(%s);", (rid,))
+                        st.success("Totais recalculados.")
+                        st.rerun()
+                    
+                    # --- emitir (gera PDF) ---
+                    if st.button("Emitir (gera PDF)", key=f"orc_emit_{rid}", type="primary", use_container_width=True, disabled=travado_final):
+                        # recalcula + emite
+                        exec_sql("select public.fn_recalcular_orcamento(%s);", (rid,))
+                        exec_sql("update public.orcamentos set status='EMITIDO' where id=%s;", (rid,))
+                    
+                        df_head = safe_df(
+                            """
+                            select
+                              o.id as orcamento_id, o.titulo, o.status, o.valor_total,
+                              ob.titulo as obra_titulo, ob.endereco_obra,
+                              c.nome as cliente_nome, c.telefone as cliente_tel
+                            from public.orcamentos o
+                            join public.obras ob on ob.id=o.obra_id
+                            join public.clientes c on c.id=ob.cliente_id
+                            where o.id=%s;
+                            """, 
+                            (rid,),
+                        )
+                        
+                        df_itens = safe_df(
+                            """
+                            select
+                              f.id as fase_id, f.ordem, f.nome_fase, f.valor_fase,
+                              s.nome as servico, s.unidade,
+                              ofs.quantidade, ofs.valor_unit, ofs.valor_total
+                            from public.obra_fases f
+                            left join public.orcamento_fase_servicos ofs on ofs.obra_fase_id=f.id and ofs.orcamento_id=f.orcamento_id
+                            left join public.servicos s on s.id=ofs.servico_id
+                            where f.orcamento_id=%s
+                            order by f.ordem, s.nome nulls last;
+                            """, 
+                            (rid,),
+                        )
+                    
+                        pdf_bytes = gerar_pdf_orcamento(df_head, df_itens)
+                    
+                        st.download_button(
+                            "⬇️ Baixar PDF do Orçamento",
+                            data=pdf_bytes,
+                            file_name=f"orcamento_{rid}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key=f"orc_pdf_{rid}"
+                        )
+
+                    # --- REABRIR (somente se ainda não foi aprovado/reprovado/cancelado) ---
+                    pode_reabrir = status_atual in ("EMITIDO", "RASCUNHO")
+                
+                    if st.button("Reabrir (voltar para RASCUNHO)", key=f"orc_reabrir_{rid}", use_container_width=True, disabled=(not pode_reabrir)):
+                        exec_sql("update public.orcamentos set status='RASCUNHO' where id=%s;", (rid,))
+                        st.success("Orçamento reaberto (RASCUNHO).")
+                        st.rerun()
     
             # Form de edição do orçamento selecionado
             edit_id = st.session_state.get("edit_orc")
@@ -1096,8 +1270,9 @@ if menu == "OBRAS":
                     st.divider()
                     st.markdown("#### ✏️ Editar orçamento")
                     with st.form("orc_edit_form", clear_on_submit=False):
-                        t = st.text_input("Título", value=rr["titulo"] or "")
-                        obs = st.text_input("Observação (opcional)", value=rr["observacao"] or "")
+                        travado_final = rr["status"] in ("APROVADO","REPROVADO","CANCELADO")
+                        t = st.text_input("Título", value=rr["titulo"] or "", disabled=travado_final)
+                        obs = st.text_input("Observação (opcional)", value=rr["observacao"] or "", disabled=travado_final)
                         b1, b2 = st.columns(2)
                         with b1:
                             salvar = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
