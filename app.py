@@ -61,18 +61,6 @@ def monday(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 # ======================================================
-# Helpers
-# ======================================================
-def set_edit(key, val):
-    st.session_state[key] = val
-
-def cancel_edit(key, clear_keys=None):
-    st.session_state[key] = None
-    if clear_keys:
-        clear(clear_keys)
-    st.rerun()
-
-# ======================================================
 # LOGIN
 # ======================================================
 if "usuario" not in st.session_state:
@@ -229,129 +217,278 @@ if menu == "PROFISSIONAIS":
                             exec_sql("update public.pessoas set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
 
-
 # ======================================================
-# CLIENTES + INDICAÇÕES
+# CLIENTES + INDICAÇÕES (estável: form + modo edição)
 # ======================================================
 if menu == "CLIENTES":
     st.subheader("👥 Clientes & Indicações")
 
     if "edit_cliente" not in st.session_state:
-        st.session_state["edit_cliente"] = None
+        st.session_state["edit_cliente"] = None  # id cliente em edição
+    if "edit_ind" not in st.session_state:
+        st.session_state["edit_ind"] = None  # id indicação em edição
 
-    # ---------- Indicações rápidas ----------
-    with st.expander("➕ Nova indicação"):
-        ind_nome = st.text_input("Nome da indicação", key="ind_nome")
-        ind_tipo = st.selectbox("Tipo", ["ARQUITETO","ENGENHEIRO","LOJA","OUTRO"], key="ind_tipo")
-        ind_tel  = st.text_input("Telefone", key="ind_tel")
+    # -------------------------
+    # INDICAÇÕES
+    # -------------------------
+    st.markdown("## Indicações (quem indicou)")
 
-        if st.button("Salvar indicação"):
-            exec_sql(
-                "insert into public.indicacoes (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
-                (ind_nome, ind_tipo, ind_tel or None),
-            )
-            st.success("Indicação cadastrada.")
+    edit_ind_id = st.session_state["edit_ind"]
+
+    if edit_ind_id is None:
+        with st.form("form_ind_novo", clear_on_submit=True):
+            c1, c2, c3 = st.columns([4, 2, 2])
+            with c1:
+                nome = st.text_input("Nome da indicação")
+            with c2:
+                tipo = st.selectbox("Tipo", ["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"], index=0)
+            with c3:
+                tel = st.text_input("Telefone (opcional)")
+
+            salvar = st.form_submit_button("Salvar indicação", type="primary", use_container_width=True)
+            if salvar:
+                if not nome.strip():
+                    st.warning("Informe o nome.")
+                    st.stop()
+                exec_sql(
+                    "insert into public.indicacoes (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
+                    (nome.strip(), tipo, tel.strip() or None),
+                )
+                st.success("Indicação cadastrada.")
+                st.rerun()
+    else:
+        df_one = safe_df("select * from public.indicacoes where id=%s;", (int(edit_ind_id),))
+        if df_one.empty:
+            st.session_state["edit_ind"] = None
             st.rerun()
+        r = df_one.iloc[0]
 
-    df_ind = safe_df("select id,nome from public.indicacoes where ativo=true order by nome;")
+        with st.form("form_ind_edit", clear_on_submit=False):
+            c1, c2, c3 = st.columns([4, 2, 2])
+            with c1:
+                nome = st.text_input("Nome da indicação", value=r["nome"], key="ind_nome_edit")
+            with c2:
+                tipo = st.selectbox(
+                    "Tipo",
+                    ["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"],
+                    index=["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"].index(r["tipo"]),
+                    key="ind_tipo_edit",
+                )
+            with c3:
+                tel = st.text_input("Telefone (opcional)", value=r["telefone"] or "", key="ind_tel_edit")
 
-    # ---------- Cliente ----------
-    edit_id = st.session_state["edit_cliente"]
-    row = None
-    if edit_id:
-        df = safe_df("select * from public.clientes where id=%s;", (edit_id,))
-        if not df.empty:
-            row = df.iloc[0]
+            b1, b2 = st.columns(2)
+            with b1:
+                salvar_alt = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+            with b2:
+                cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
 
-    st.markdown("### 🧾 Cliente")
+            if salvar_alt:
+                if not nome.strip():
+                    st.warning("Informe o nome.")
+                    st.stop()
+                exec_sql(
+                    "update public.indicacoes set nome=%s, tipo=%s, telefone=%s where id=%s;",
+                    (nome.strip(), tipo, tel.strip() or None, int(edit_ind_id)),
+                )
+                st.success("Indicação atualizada.")
+                st.session_state["edit_ind"] = None
+                st.rerun()
 
-    nome = st.text_input("Nome", value=row["nome"] if row is not None else "", key="c_nome")
-    tel  = st.text_input("Telefone", value=row["telefone"] or "" if row is not None else "", key="c_tel")
-    end  = st.text_input("Endereço", value=row["endereco"] or "" if row is not None else "", key="c_end")
+            if cancelar:
+                st.session_state["edit_ind"] = None
+                st.rerun()
 
-    origem = st.selectbox(
-        "Origem",
-        ["PROPRIO","INDICADO"],
-        index=["PROPRIO","INDICADO"].index(row["origem"]) if row is not None else 0,
-        key="c_origem"
-    )
+    df_ind = safe_df("select id, nome, tipo, telefone, ativo from public.indicacoes order by nome;")
+    if df_ind.empty:
+        st.info("Nenhuma indicação cadastrada.")
+    else:
+        for _, rr in df_ind.iterrows():
+            colA, colB, colC = st.columns([6, 2, 2])
+            with colA:
+                st.write(f"**{rr['nome']}** — {rr['tipo']}")
+                if rr["telefone"]:
+                    st.caption(rr["telefone"])
+            with colB:
+                st.write("ATIVO ✅" if rr["ativo"] else "INATIVO ⛔")
+            with colC:
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("Editar", key=f"ind_edit_{int(rr['id'])}", use_container_width=True):
+                        st.session_state["edit_ind"] = int(rr["id"])
+                        st.rerun()
+                with b2:
+                    if rr["ativo"]:
+                        if st.button("Inativar", key=f"ind_inat_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.indicacoes set ativo=false where id=%s;", (int(rr["id"]),))
+                            st.rerun()
+                    else:
+                        if st.button("Ativar", key=f"ind_at_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.indicacoes set ativo=true where id=%s;", (int(rr["id"]),))
+                            st.rerun()
 
-    indicacao_id = None
-    if origem == "INDICADO":
-        ids = df_ind["id"].tolist()
-        if not ids:
-            st.warning("Cadastre uma indicação primeiro.")
-        else:
-            indicacao_id = st.selectbox(
-                "Quem indicou",
-                ids,
-                format_func=lambda x: df_ind.loc[df_ind["id"]==x,"nome"].iloc[0],
-                key="c_ind"
-            )
+    st.divider()
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if not edit_id:
-            if st.button("Salvar cliente", type="primary"):
+    # ======================================================
+    # CLIENTES
+    # ======================================================
+    st.markdown("## Clientes")
+
+    edit_cli_id = st.session_state["edit_cliente"]
+
+    # opções de indicação ativas para cliente indicado
+    df_ind_ativos = safe_df("select id, nome from public.indicacoes where ativo=true order by nome;")
+
+    def indic_fmt(x):
+        if df_ind_ativos.empty:
+            return str(x)
+        return df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0]
+
+    if edit_cli_id is None:
+        with st.form("form_cli_novo", clear_on_submit=True):
+            c1, c2, c3 = st.columns([4, 2, 2])
+            with c1:
+                nome = st.text_input("Nome do cliente")
+            with c2:
+                tel = st.text_input("Telefone (opcional)")
+            with c3:
+                origem = st.selectbox("Origem", ["PROPRIO", "INDICADO"], index=0)
+
+            end = st.text_input("Endereço (opcional)")
+
+            indicacao_id = None
+            if origem == "INDICADO":
+                ids = df_ind_ativos["id"].tolist()
+                if not ids:
+                    st.warning("Não há indicações ativas. Cadastre uma indicação acima.")
+                else:
+                    indicacao_id = st.selectbox("Quem indicou", ids, format_func=indic_fmt)
+
+            salvar = st.form_submit_button("Salvar cliente", type="primary", use_container_width=True)
+            if salvar:
+                if not nome.strip():
+                    st.warning("Informe o nome.")
+                    st.stop()
+                if origem == "INDICADO" and not indicacao_id:
+                    st.warning("Selecione quem indicou.")
+                    st.stop()
+
                 exec_sql(
                     """
-                    insert into public.clientes
-                    (nome,telefone,endereco,origem,indicacao_id,ativo)
-                    values (%s,%s,%s,%s,%s,true)
+                    insert into public.clientes (nome,telefone,endereco,origem,indicacao_id,ativo)
+                    values (%s,%s,%s,%s,%s,true);
                     """,
-                    (nome, tel or None, end or None, origem, indicacao_id),
+                    (nome.strip(), tel.strip() or None, end.strip() or None, origem, indicacao_id),
                 )
                 st.success("Cliente cadastrado.")
                 st.rerun()
-        else:
-            if st.button("Salvar alteração", type="primary"):
+    else:
+        df_one = safe_df("select * from public.clientes where id=%s;", (int(edit_cli_id),))
+        if df_one.empty:
+            st.session_state["edit_cliente"] = None
+            st.rerun()
+        r = df_one.iloc[0]
+
+        with st.form("form_cli_edit", clear_on_submit=False):
+            c1, c2, c3 = st.columns([4, 2, 2])
+            with c1:
+                nome = st.text_input("Nome do cliente", value=r["nome"], key="cli_nome_edit")
+            with c2:
+                tel = st.text_input("Telefone (opcional)", value=r["telefone"] or "", key="cli_tel_edit")
+            with c3:
+                origem = st.selectbox(
+                    "Origem",
+                    ["PROPRIO", "INDICADO"],
+                    index=["PROPRIO", "INDICADO"].index(r["origem"]),
+                    key="cli_origem_edit",
+                )
+
+            end = st.text_input("Endereço (opcional)", value=r["endereco"] or "", key="cli_end_edit")
+
+            indicacao_id = None
+            if origem == "INDICADO":
+                ids = df_ind_ativos["id"].tolist()
+                if not ids:
+                    st.warning("Não há indicações ativas. Cadastre uma indicação acima.")
+                else:
+                    default = int(r["indicacao_id"]) if pd.notna(r["indicacao_id"]) else ids[0]
+                    idx = ids.index(default) if default in ids else 0
+                    indicacao_id = st.selectbox(
+                        "Quem indicou",
+                        ids,
+                        index=idx,
+                        format_func=indic_fmt,
+                        key="cli_ind_edit",
+                    )
+
+            b1, b2 = st.columns(2)
+            with b1:
+                salvar_alt = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+            with b2:
+                cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
+
+            if salvar_alt:
+                if not nome.strip():
+                    st.warning("Informe o nome.")
+                    st.stop()
+                if origem == "INDICADO" and not indicacao_id:
+                    st.warning("Selecione quem indicou.")
+                    st.stop()
+
                 exec_sql(
                     """
                     update public.clientes
                     set nome=%s, telefone=%s, endereco=%s, origem=%s, indicacao_id=%s
                     where id=%s;
                     """,
-                    (nome, tel or None, end or None, origem, indicacao_id, int(edit_id)),
+                    (nome.strip(), tel.strip() or None, end.strip() or None, origem, indicacao_id, int(edit_cli_id)),
                 )
-                cancel_edit("edit_cliente", ["c_nome","c_tel","c_end"])
+                st.success("Cliente atualizado.")
+                st.session_state["edit_cliente"] = None
+                st.rerun()
 
-    with c2:
-        if edit_id:
-            if st.button("Cancelar edição"):
-                cancel_edit("edit_cliente", ["c_nome","c_tel","c_end"])
+            if cancelar:
+                st.session_state["edit_cliente"] = None
+                st.rerun()
 
-    st.divider()
     st.markdown("### 📋 Lista de clientes")
-
-    df = safe_df("""
-        select c.id, c.nome, c.telefone, c.origem,
-               i.nome as indicacao, c.ativo
+    df_cli = safe_df("""
+        select c.id, c.nome, c.telefone, c.origem, c.ativo,
+               i.nome as indicacao_nome
         from public.clientes c
         left join public.indicacoes i on i.id=c.indicacao_id
         order by c.nome;
     """)
 
-    for _, r in df.iterrows():
-        colA, colB, colC = st.columns([6,2,2])
-        with colA:
-            st.write(f"**{r['nome']}** — {r['origem']} — {r['indicacao'] or ''}")
-        with colB:
-            st.write("ATIVO" if r["ativo"] else "INATIVO")
-        with colC:
-            if st.button("Editar", key=f"c_edit_{r['id']}"):
-                set_edit("edit_cliente", int(r["id"]))
-                st.rerun()
-            if r["ativo"]:
-                if st.button("Inativar", key=f"c_inat_{r['id']}"):
-                    exec_sql("update public.clientes set ativo=false where id=%s;", (int(r["id"]),))
-                    st.rerun()
-            else:
-                if st.button("Ativar", key=f"c_at_{r['id']}"):
-                    exec_sql("update public.clientes set ativo=true where id=%s;", (int(r["id"]),))
-                    st.rerun()
+    if df_cli.empty:
+        st.info("Nenhum cliente cadastrado.")
+    else:
+        for _, rr in df_cli.iterrows():
+            colA, colB, colC = st.columns([6, 2, 2])
+            with colA:
+                st.write(f"**{rr['nome']}** — {rr['origem']} — {rr['indicacao_nome'] or ''}")
+                if rr["telefone"]:
+                    st.caption(rr["telefone"])
+            with colB:
+                st.write("ATIVO ✅" if rr["ativo"] else "INATIVO ⛔")
+            with colC:
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("Editar", key=f"cli_edit_{int(rr['id'])}", use_container_width=True):
+                        st.session_state["edit_cliente"] = int(rr["id"])
+                        st.rerun()
+                with b2:
+                    if rr["ativo"]:
+                        if st.button("Inativar", key=f"cli_inat_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.clientes set ativo=false where id=%s;", (int(rr["id"]),))
+                            st.rerun()
+                    else:
+                        if st.button("Ativar", key=f"cli_at_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.clientes set ativo=true where id=%s;", (int(rr["id"]),))
+                            st.rerun()
 
 # ======================================================
-# OBRAS
+# OBRAS (estável: form + modo edição + cliente rápido com origem/indicação)
 # ======================================================
 if menu == "OBRAS":
     st.subheader("🏗️ Obras")
@@ -359,107 +496,208 @@ if menu == "OBRAS":
     if "edit_obra" not in st.session_state:
         st.session_state["edit_obra"] = None
 
-    df_cli = safe_df("select id,nome from public.clientes where ativo=true order by nome;")
+    # Listas base
+    df_cli_ativos = safe_df("select id, nome from public.clientes where ativo=true order by nome;")
+    df_ind_ativos = safe_df("select id, nome from public.indicacoes where ativo=true order by nome;")
 
-    # ---------- Cliente rápido ----------
-    with st.expander("➕ Cliente rápido"):
-        rc_nome = st.text_input("Nome cliente", key="rc_nome")
-        rc_tel  = st.text_input("Telefone", key="rc_tel")
-        if st.button("Criar cliente"):
-            exec_sql(
-                "insert into public.clientes (nome,telefone,origem,ativo) values (%s,%s,'PROPRIO',true);",
-                (rc_nome, rc_tel or None),
-            )
-            st.success("Cliente criado.")
-            st.rerun()
+    def ind_fmt(x):
+        if df_ind_ativos.empty:
+            return str(x)
+        return df_ind_ativos.loc[df_ind_ativos["id"] == x, "nome"].iloc[0]
 
-    edit_id = st.session_state["edit_obra"]
-    row = None
-    if edit_id:
-        df = safe_df("select * from public.obras where id=%s;", (edit_id,))
-        if not df.empty:
-            row = df.iloc[0]
+    # -------------------------
+    # Cliente rápido (com origem + indicação + indicação rápida inline)
+    # -------------------------
+    with st.expander("➕ Cliente rápido (para criar obra na hora)"):
+        with st.form("form_cliente_rapido", clear_on_submit=True):
+            c1, c2, c3 = st.columns([4, 2, 2])
+            with c1:
+                nome = st.text_input("Nome do cliente")
+            with c2:
+                tel = st.text_input("Telefone (opcional)")
+            with c3:
+                origem = st.selectbox("Origem", ["PROPRIO", "INDICADO"], index=0)
 
-    st.markdown("### 🧱 Obra")
+            end = st.text_input("Endereço (opcional)")
 
-    cli_ids = df_cli["id"].tolist()
-    if not cli_ids:
-        st.warning("Cadastre pelo menos um cliente.")
-        st.stop()
+            indicacao_id = None
+            if origem == "INDICADO":
+                # Criar indicação rápida
+                st.markdown("**Indicação**")
+                cc1, cc2, cc3 = st.columns([4, 2, 2])
+                with cc1:
+                    ind_nome = st.text_input("Nova indicação (opcional)")
+                with cc2:
+                    ind_tipo = st.selectbox("Tipo", ["ARQUITETO", "ENGENHEIRO", "LOJA", "OUTRO"], index=0)
+                with cc3:
+                    ind_tel = st.text_input("Telefone indicação (opcional)")
 
-    cliente_id = st.selectbox(
-        "Cliente",
-        cli_ids,
-        index=cli_ids.index(row["cliente_id"]) if row is not None else 0,
-        format_func=lambda x: df_cli.loc[df_cli["id"]==x,"nome"].iloc[0],
-        key="o_cli"
-    )
+                # Ou escolher existente
+                ids = df_ind_ativos["id"].tolist()
+                if ids:
+                    indicacao_id = st.selectbox("Ou selecione indicação existente", ids, format_func=ind_fmt)
+                else:
+                    indicacao_id = None
 
-    titulo = st.text_input("Título da obra", value=row["titulo"] if row is not None else "", key="o_tit")
-    endereco = st.text_input("Endereço", value=row["endereco_obra"] or "" if row is not None else "", key="o_end")
-    status = st.selectbox(
-        "Status",
-        ["AGUARDANDO","INICIADO","PAUSADO","CANCELADO","CONCLUIDO"],
-        index=["AGUARDANDO","INICIADO","PAUSADO","CANCELADO","CONCLUIDO"].index(row["status"]) if row is not None else 0,
-        key="o_status"
-    )
+            criar = st.form_submit_button("Criar cliente", type="primary", use_container_width=True)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if not edit_id:
-            if st.button("Salvar obra", type="primary"):
+            if criar:
+                if not nome.strip():
+                    st.warning("Informe o nome do cliente.")
+                    st.stop()
+
+                # Se origem indicado: precisa ter indicação (nova ou existente)
+                if origem == "INDICADO":
+                    if ind_nome.strip():
+                        # cria nova indicação e usa ela
+                        exec_sql(
+                            "insert into public.indicacoes (nome,tipo,telefone,ativo) values (%s,%s,%s,true);",
+                            (ind_nome.strip(), ind_tipo, ind_tel.strip() or None),
+                        )
+                        # pega o id criado
+                        df_last = safe_df("select id from public.indicacoes where nome=%s order by id desc limit 1;", (ind_nome.strip(),))
+                        indicacao_id = int(df_last.iloc[0]["id"])
+                    if not indicacao_id:
+                        st.warning("Selecione uma indicação existente ou cadastre uma nova.")
+                        st.stop()
+
                 exec_sql(
                     """
-                    insert into public.obras
-                    (cliente_id,titulo,endereco_obra,status,ativo)
-                    values (%s,%s,%s,%s,true)
+                    insert into public.clientes (nome,telefone,endereco,origem,indicacao_id,ativo)
+                    values (%s,%s,%s,%s,%s,true);
                     """,
-                    (cliente_id,titulo,endereco or None,status),
+                    (nome.strip(), tel.strip() or None, end.strip() or None, origem, indicacao_id),
+                )
+                st.success("Cliente criado. Agora selecione ele no cadastro da obra abaixo.")
+                st.rerun()
+
+    st.divider()
+
+    # Atualiza clientes (caso tenha criado cliente rápido)
+    df_cli_ativos = safe_df("select id, nome from public.clientes where ativo=true order by nome;")
+    cli_ids = df_cli_ativos["id"].tolist()
+
+    if not cli_ids:
+        st.warning("Cadastre pelo menos um cliente ativo.")
+        st.stop()
+
+    edit_id = st.session_state["edit_obra"]
+
+    if edit_id is None:
+        st.markdown("### ➕ Nova obra")
+        with st.form("form_obra_nova", clear_on_submit=True):
+            cliente_id = st.selectbox(
+                "Cliente",
+                cli_ids,
+                format_func=lambda x: df_cli_ativos.loc[df_cli_ativos["id"] == x, "nome"].iloc[0],
+            )
+            titulo = st.text_input("Título da obra")
+            endereco = st.text_input("Endereço (opcional)")
+            status = st.selectbox(
+                "Status",
+                ["AGUARDANDO", "INICIADO", "PAUSADO", "CANCELADO", "CONCLUIDO"],
+                index=0,
+            )
+
+            salvar = st.form_submit_button("Salvar obra", type="primary", use_container_width=True)
+            if salvar:
+                if not titulo.strip():
+                    st.warning("Informe o título.")
+                    st.stop()
+                exec_sql(
+                    """
+                    insert into public.obras (cliente_id,titulo,endereco_obra,status,ativo)
+                    values (%s,%s,%s,%s,true);
+                    """,
+                    (int(cliente_id), titulo.strip(), endereco.strip() or None, status),
                 )
                 st.success("Obra cadastrada.")
                 st.rerun()
-        else:
-            if st.button("Salvar alteração", type="primary"):
+    else:
+        df_one = safe_df("select * from public.obras where id=%s;", (int(edit_id),))
+        if df_one.empty:
+            st.session_state["edit_obra"] = None
+            st.rerun()
+        r = df_one.iloc[0]
+
+        st.markdown("### ✏️ Editar obra")
+        with st.form("form_obra_edit", clear_on_submit=False):
+            cliente_default = int(r["cliente_id"])
+            idx = cli_ids.index(cliente_default) if cliente_default in cli_ids else 0
+
+            cliente_id = st.selectbox(
+                "Cliente",
+                cli_ids,
+                index=idx,
+                format_func=lambda x: df_cli_ativos.loc[df_cli_ativos["id"] == x, "nome"].iloc[0],
+                key="obra_cli_edit",
+            )
+            titulo = st.text_input("Título da obra", value=r["titulo"], key="obra_tit_edit")
+            endereco = st.text_input("Endereço (opcional)", value=r["endereco_obra"] or "", key="obra_end_edit")
+            status = st.selectbox(
+                "Status",
+                ["AGUARDANDO", "INICIADO", "PAUSADO", "CANCELADO", "CONCLUIDO"],
+                index=["AGUARDANDO", "INICIADO", "PAUSADO", "CANCELADO", "CONCLUIDO"].index(r["status"]),
+                key="obra_status_edit",
+            )
+
+            b1, b2 = st.columns(2)
+            with b1:
+                salvar_alt = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+            with b2:
+                cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
+
+            if salvar_alt:
+                if not titulo.strip():
+                    st.warning("Informe o título.")
+                    st.stop()
                 exec_sql(
                     """
                     update public.obras
                     set cliente_id=%s, titulo=%s, endereco_obra=%s, status=%s
                     where id=%s;
                     """,
-                    (cliente_id,titulo,endereco or None,status,int(edit_id)),
+                    (int(cliente_id), titulo.strip(), endereco.strip() or None, status, int(edit_id)),
                 )
-                cancel_edit("edit_obra", ["o_tit","o_end"])
+                st.success("Obra atualizada.")
+                st.session_state["edit_obra"] = None
+                st.rerun()
 
-    with c2:
-        if edit_id:
-            if st.button("Cancelar edição"):
-                cancel_edit("edit_obra", ["o_tit","o_end"])
+            if cancelar:
+                st.session_state["edit_obra"] = None
+                st.rerun()
 
     st.divider()
     st.markdown("### 📋 Lista de obras")
 
-    df = safe_df("""
-        select o.id, o.titulo, o.status, o.ativo, c.nome cliente
+    df_obras = safe_df("""
+        select o.id, o.titulo, o.status, o.ativo, c.nome as cliente
         from public.obras o
         join public.clientes c on c.id=o.cliente_id
         order by o.id desc;
     """)
 
-    for _, r in df.iterrows():
-        colA, colB, colC = st.columns([6,2,2])
-        with colA:
-            st.write(f"**{r['titulo']}** — {r['cliente']}")
-        with colB:
-            st.write(r["status"])
-        with colC:
-            if st.button("Editar", key=f"o_edit_{r['id']}"):
-                set_edit("edit_obra", int(r["id"]))
-                st.rerun()
-            if r["ativo"]:
-                if st.button("Inativar", key=f"o_inat_{r['id']}"):
-                    exec_sql("update public.obras set ativo=false where id=%s;", (int(r["id"]),))
-                    st.rerun()
-            else:
-                if st.button("Ativar", key=f"o_at_{r['id']}"):
-                    exec_sql("update public.obras set ativo=true where id=%s;", (int(r["id"]),))
-                    st.rerun()
+    if df_obras.empty:
+        st.info("Nenhuma obra cadastrada.")
+    else:
+        for _, rr in df_obras.iterrows():
+            colA, colB, colC = st.columns([6, 2, 2])
+            with colA:
+                st.write(f"**{rr['titulo']}** — {rr['cliente']}")
+            with colB:
+                st.write(rr["status"])
+            with colC:
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("Editar", key=f"obra_edit_{int(rr['id'])}", use_container_width=True):
+                        st.session_state["edit_obra"] = int(rr["id"])
+                        st.rerun()
+                with b2:
+                    if rr["ativo"]:
+                        if st.button("Inativar", key=f"obra_inat_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.obras set ativo=false where id=%s;", (int(rr["id"]),))
+                            st.rerun()
+                    else:
+                        if st.button("Ativar", key=f"obra_at_{int(rr['id'])}", use_container_width=True):
+                            exec_sql("update public.obras set ativo=true where id=%s;", (int(rr["id"]),))
+                            st.rerun()
