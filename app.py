@@ -41,7 +41,7 @@ def exec_sql(sql, params=None):
         conn.rollback()
         raise
 
-def safe_query(sql, params=None):
+def safe_df(sql, params=None):
     try:
         return query_df(sql, params)
     except Exception as e:
