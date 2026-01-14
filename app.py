@@ -159,7 +159,8 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
 
     y = h - 50
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, f"SEPOL - Orçamento #{r['orcamento_id']} - {r['titulo']}  Status: {r['status']}")
+    c.drawString(50, y, f"SEPOL - Orçamento #{r['orcamento_id']}")
+    c.drawString(35, y, f"{r['titulo']}  - Status: {r['status']}")
     y -= 25
 
     c.setFont("Helvetica", 10)
@@ -222,7 +223,7 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
 
         y -= 14
 
-    c.setFont("Helvetica-Bold", 12)
+    c.setFont("Helvetica-Bold", 11)
     c.drawString(50, y, f"TOTAL BRUTO: {brl(r['valor_total'])}")
     y -= 14
     c.drawString(50, y, f"DESCONTO: {brl(r['desconto_valor'])}")
