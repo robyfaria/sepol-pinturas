@@ -61,6 +61,20 @@ def monday(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 # ======================================================
+# HELPERS
+# ======================================================
+def first_or_none(df, col):
+    if df is None or df.empty:
+        return None
+    return df.iloc[0][col]
+
+def to_int(x):
+    try:
+        return int(x)
+    except Exception:
+        return None
+
+# ======================================================
 # LOGIN
 # ======================================================
 if "usuario" not in st.session_state:
@@ -83,7 +97,7 @@ if not st.session_state["usuario"]:
 # MENU
 # ======================================================
 if "menu" not in st.session_state:
-    st.session_state["menu"] = "PROFISSIONAIS"
+    st.session_state["menu"] = "HOJE"
 
 with st.sidebar:
     st.markdown(f"👤 {st.session_state['usuario']}")
@@ -722,6 +736,412 @@ if menu == "OBRAS":
                         if st.button("ATIVAR ✅", key=f"obra_at_{int(rr['id'])}", use_container_width=True):
                             exec_sql("update public.obras set ativo=true where id=%s;", (int(rr["id"]),))
                             st.rerun()
+                            
+    if "obra_sel" not in st.session_state:
+        st.session_state["obra_sel"] = None
+    if "orc_sel" not in st.session_state:
+        st.session_state["orc_sel"] = None
+    if "edit_orc" not in st.session_state:
+        st.session_state["edit_orc"] = None
+    if "edit_fase" not in st.session_state:
+        st.session_state["edit_fase"] = None
+
+    st.divider()
+    st.markdown("## 🔎 Abrir uma Obra")
+
+    df_obras = safe_df("""
+        select o.id, o.titulo, o.status, c.nome as cliente
+        from public.obras o
+        join public.clientes c on c.id=o.cliente_id
+        where o.ativo=true
+        order by o.id desc
+        limit 200;
+    """)
+
+    if df_obras.empty:
+        st.info("Nenhuma obra cadastrada.")
+        st.stop()
+
+    obra_ids = df_obras["id"].tolist()
+    default_obra = st.session_state["obra_sel"] if st.session_state["obra_sel"] in obra_ids else obra_ids[0]
+
+    obra_sel = st.selectbox(
+        "Selecione a obra",
+        obra_ids,
+        index=obra_ids.index(default_obra),
+        format_func=lambda x: f"#{x} • {df_obras.loc[df_obras['id']==x,'titulo'].iloc[0]} • {df_obras.loc[df_obras['id']==x,'cliente'].iloc[0]}",
+        key="obra_sel_box",
+    )
+
+    # sincroniza seleção
+    if st.session_state["obra_sel"] != obra_sel:
+        st.session_state["obra_sel"] = obra_sel
+        st.session_state["orc_sel"] = None
+        st.session_state["edit_orc"] = None
+        st.session_state["edit_fase"] = None
+        st.rerun()
+
+    obra_id = int(st.session_state["obra_sel"])
+
+    tabs = st.tabs(["Orçamentos", "Fases do Orçamento", "Recebimentos"])
+
+    with tabs[0]:
+        st.markdown("### 📄 Orçamentos da Obra")
+    
+        df_orc = safe_df("""
+            select id, titulo, status, criado_em, aprovado_em
+            from public.orcamentos
+            where obra_id=%s
+            order by id desc;
+        """, (obra_id,))
+    
+        # --- Criar novo orçamento ---
+        with st.form("orc_novo", clear_on_submit=True):
+            col1, col2 = st.columns([5,2])
+            with col1:
+                tit = st.text_input("Título do orçamento", value="Orçamento")
+            with col2:
+                st.caption("Status inicial")
+                st.write("RASCUNHO")
+            criar = st.form_submit_button("Criar orçamento", type="primary", use_container_width=True)
+            if criar:
+                if not tit.strip():
+                    st.warning("Informe o título.")
+                    st.stop()
+                exec_sql(
+                    "insert into public.orcamentos (obra_id, titulo, status) values (%s,%s,'RASCUNHO');",
+                    (obra_id, tit.strip()),
+                )
+                st.success("Orçamento criado.")
+                st.rerun()
+    
+        st.divider()
+        st.markdown("#### Lista (selecionar / editar / aprovar)")
+    
+        if df_orc.empty:
+            st.info("Nenhum orçamento ainda. Crie um orçamento.")
+        else:
+            # seleção do orçamento ativo na UI
+            orc_ids = df_orc["id"].tolist()
+            if st.session_state["orc_sel"] not in orc_ids:
+                st.session_state["orc_sel"] = orc_ids[0]
+    
+            sel = st.selectbox(
+                "Orçamento selecionado",
+                orc_ids,
+                index=orc_ids.index(st.session_state["orc_sel"]),
+                format_func=lambda x: f"#{x} • {df_orc.loc[df_orc['id']==x,'titulo'].iloc[0]} • {df_orc.loc[df_orc['id']==x,'status'].iloc[0]}",
+                key="orc_sel_box",
+            )
+            st.session_state["orc_sel"] = sel
+    
+            # grid simples 60+
+            for _, r in df_orc.iterrows():
+                rid = int(r["id"])
+                c1, c2, c3, c4, c5 = st.columns([5,2,2,2,2])
+                with c1:
+                    st.write(f"**#{rid} — {r['titulo']}**")
+                    st.caption(f"Status: {r['status']} • Criado: {str(r['criado_em'])[:19]}")
+                with c2:
+                    if st.button("Selecionar", key=f"orc_pick_{rid}", use_container_width=True):
+                        st.session_state["orc_sel"] = rid
+                        st.session_state["edit_orc"] = rid
+                        st.rerun()
+                with c3:
+                    if st.button("Editar", key=f"orc_edit_{rid}", use_container_width=True):
+                        st.session_state["edit_orc"] = rid
+                        st.rerun()
+                with c4:
+                    if st.button("Aprovar", key=f"orc_ap_{rid}", type="primary", use_container_width=True):
+                        try:
+                            exec_sql(
+                                "update public.orcamentos set status='APROVADO', aprovado_em=current_date where id=%s;",
+                                (rid,),
+                            )
+                            st.success("Orçamento aprovado.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error("Não foi possível aprovar. Talvez já exista outro orçamento APROVADO para esta obra.")
+                            st.exception(e)
+                with c5:
+                    novo_status = st.selectbox(
+                        "Status",
+                        ["RASCUNHO","EMITIDO","REPROVADO","CANCELADO","APROVADO"],
+                        index=["RASCUNHO","EMITIDO","REPROVADO","CANCELADO","APROVADO"].index(r["status"]),
+                        key=f"orc_st_{rid}"
+                    )
+                    if st.button("Salvar status", key=f"orc_svst_{rid}", use_container_width=True):
+                        # Aprovação deve passar pela regra do índice único
+                        try:
+                            exec_sql(
+                                "update public.orcamentos set status=%s, aprovado_em=case when %s='APROVADO' then current_date else aprovado_em end where id=%s;",
+                                (novo_status, novo_status, rid),
+                            )
+                            st.success("Status atualizado.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error("Falha ao atualizar status (provável conflito com orçamento APROVADO).")
+                            st.exception(e)
+    
+            # Form de edição do orçamento selecionado
+            edit_id = st.session_state.get("edit_orc")
+            if edit_id:
+                df_one = safe_df("select * from public.orcamentos where id=%s;", (int(edit_id),))
+                if not df_one.empty:
+                    rr = df_one.iloc[0]
+                    st.divider()
+                    st.markdown("#### ✏️ Editar orçamento")
+                    with st.form("orc_edit_form", clear_on_submit=False):
+                        t = st.text_input("Título", value=rr["titulo"] or "")
+                        obs = st.text_input("Observação (opcional)", value=rr["observacao"] or "")
+                        b1, b2 = st.columns(2)
+                        with b1:
+                            salvar = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+                        with b2:
+                            cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
+                        if salvar:
+                            if not t.strip():
+                                st.warning("Informe o título.")
+                                st.stop()
+                            exec_sql("update public.orcamentos set titulo=%s, observacao=%s where id=%s;", (t.strip(), obs.strip() or None, int(edit_id)))
+                            st.session_state["edit_orc"] = None
+                            st.success("Atualizado.")
+                            st.rerun()
+                        if cancelar:
+                            st.session_state["edit_orc"] = None
+                            st.rerun()
+
+    with tabs[1]:
+        st.markdown("### 🧱 Fases do Orçamento")
+    
+        orc_id = st.session_state.get("orc_sel")
+        if not orc_id:
+            st.info("Selecione um orçamento na aba Orçamentos.")
+            st.stop()
+    
+        # status do orçamento (para travar apontamento depois)
+        df_orc1 = safe_df("select id, status, titulo from public.orcamentos where id=%s;", (int(orc_id),))
+        orc_status = df_orc1.iloc[0]["status"]
+        st.caption(f"Orçamento #{orc_id}: **{df_orc1.iloc[0]['titulo']}** • Status: **{orc_status}**")
+    
+        df_fases = safe_df("""
+            select id, ordem, nome_fase, status, valor_fase
+            from public.obra_fases
+            where orcamento_id=%s
+            order by ordem asc;
+        """, (int(orc_id),))
+    
+        # --- Nova fase / editar fase ---
+        edit_fase = st.session_state.get("edit_fase")
+    
+        if edit_fase:
+            df_one = safe_df("select * from public.obra_fases where id=%s;", (int(edit_fase),))
+            if df_one.empty:
+                st.session_state["edit_fase"] = None
+                st.rerun()
+            r = df_one.iloc[0]
+            st.markdown("#### ✏️ Editar fase")
+            with st.form("fase_edit", clear_on_submit=False):
+                c1, c2, c3 = st.columns([2,5,2])
+                with c1:
+                    ordem = st.number_input("Ordem", min_value=1, step=1, value=int(r["ordem"]))
+                with c2:
+                    nome = st.text_input("Nome da fase", value=r["nome_fase"])
+                with c3:
+                    status = st.selectbox("Status", ["AGUARDANDO","INICIADO","PAUSADO","CONCLUIDO","CANCELADO"],
+                                          index=["AGUARDANDO","INICIADO","PAUSADO","CONCLUIDO","CANCELADO"].index(r["status"]))
+                valor = st.number_input("Valor da fase (R$)", min_value=0.0, step=100.0, value=float(r["valor_fase"]))
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    salvar = st.form_submit_button("Salvar alteração", type="primary", use_container_width=True)
+                with b2:
+                    cancelar = st.form_submit_button("Cancelar edição", use_container_width=True)
+                with b3:
+                    excluir = st.form_submit_button("Excluir", use_container_width=True)
+    
+                if salvar:
+                    if not nome.strip():
+                        st.warning("Informe o nome da fase.")
+                        st.stop()
+                    try:
+                        exec_sql("""
+                            update public.obra_fases
+                            set ordem=%s, nome_fase=%s, status=%s, valor_fase=%s
+                            where id=%s;
+                        """, (int(ordem), nome.strip(), status, float(valor), int(edit_fase)))
+                        st.success("Fase atualizada.")
+                        st.session_state["edit_fase"] = None
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Falha ao salvar (talvez conflito de ordem dentro do orçamento).")
+                        st.exception(e)
+                        st.stop()
+    
+                if cancelar:
+                    st.session_state["edit_fase"] = None
+                    st.rerun()
+    
+                if excluir:
+                    # se já existir recebimento, vai bloquear por FK (ok)
+                    try:
+                        exec_sql("delete from public.obra_fases where id=%s;", (int(edit_fase),))
+                        st.success("Fase excluída.")
+                        st.session_state["edit_fase"] = None
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Não foi possível excluir (pode haver recebimento associado).")
+                        st.exception(e)
+                        st.stop()
+        else:
+            st.markdown("#### ➕ Nova fase")
+            with st.form("fase_nova", clear_on_submit=True):
+                c1, c2, c3 = st.columns([2,5,2])
+                with c1:
+                    ordem = st.number_input("Ordem", min_value=1, step=1, value=1)
+                with c2:
+                    nome = st.text_input("Nome da fase", value="PREPARAÇÃO E APLICAÇÃO")
+                with c3:
+                    status = st.selectbox("Status", ["AGUARDANDO","INICIADO","PAUSADO","CONCLUIDO","CANCELADO"], index=0)
+                valor = st.number_input("Valor da fase (R$)", min_value=0.0, step=100.0, value=0.0)
+    
+                salvar = st.form_submit_button("Salvar fase", type="primary", use_container_width=True)
+                if salvar:
+                    if not nome.strip():
+                        st.warning("Informe o nome da fase.")
+                        st.stop()
+                    try:
+                        exec_sql("""
+                            insert into public.obra_fases (obra_id, orcamento_id, nome_fase, ordem, status, valor_fase)
+                            values (%s,%s,%s,%s,%s,%s);
+                        """, (obra_id, int(orc_id), nome.strip(), int(ordem), status, float(valor)))
+                        st.success("Fase criada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Falha ao criar (provável conflito de ordem dentro do orçamento).")
+                        st.exception(e)
+                        st.stop()
+    
+        st.divider()
+        st.markdown("#### Lista de fases")
+        if df_fases.empty:
+            st.info("Nenhuma fase ainda.")
+        else:
+            for _, rr in df_fases.iterrows():
+                fid = int(rr["id"])
+                c1, c2, c3, c4, c5 = st.columns([1,4,2,2,2])
+                with c1:
+                    st.write(int(rr["ordem"]))
+                with c2:
+                    st.write(f"**{rr['nome_fase']}**")
+                with c3:
+                    st.write(rr["status"])
+                with c4:
+                    st.write(brl(rr["valor_fase"]))
+                with c5:
+                    if st.button("Editar", key=f"fase_edit_{fid}", use_container_width=True):
+                        st.session_state["edit_fase"] = fid
+                        st.rerun()
+
+    with tabs[2]:
+        st.markdown("### 💳 Recebimentos (por fase)")
+    
+        orc_id = st.session_state.get("orc_sel")
+        if not orc_id:
+            st.info("Selecione um orçamento na aba Orçamentos.")
+            st.stop()
+    
+        df_fases = safe_df("""
+            select id, ordem, nome_fase, valor_fase, status
+            from public.obra_fases
+            where orcamento_id=%s
+            order by ordem;
+        """, (int(orc_id),))
+    
+        if df_fases.empty:
+            st.info("Crie fases primeiro.")
+            st.stop()
+    
+        # lista fases + recebimento existente (se houver)
+        df_rec = safe_df("""
+            select r.id as receb_id, r.obra_fase_id, r.status as receb_status,
+                   r.valor_base, r.acrescimo, r.valor_total, r.vencimento_em, r.pago_em
+            from public.recebimentos r
+            where r.orcamento_id=%s
+            order by r.id desc;
+        """, (int(orc_id),))
+    
+        rec_by_fase = {}
+        if not df_rec.empty:
+            for _, r in df_rec.iterrows():
+                rec_by_fase[int(r["obra_fase_id"])] = r
+    
+        for _, f in df_fases.iterrows():
+            fase_id = int(f["id"])
+            rec = rec_by_fase.get(fase_id)
+    
+            st.markdown(f"#### Fase {int(f['ordem'])} — {f['nome_fase']}")
+            c1, c2, c3, c4 = st.columns([2,2,2,2])
+            with c1:
+                st.write("Valor fase:", brl(f["valor_fase"]))
+            with c2:
+                st.write("Recebimento:", ("—" if rec is None else f"#{int(rec['receb_id'])}"))
+            with c3:
+                st.write("Status:", ("—" if rec is None else rec["receb_status"]))
+            with c4:
+                st.write("Total:", ("—" if rec is None else brl(rec["valor_total"])))
+    
+            with st.expander("Criar / Atualizar recebimento"):
+                with st.form(f"rec_form_{fase_id}", clear_on_submit=False):
+                    status = st.selectbox(
+                        "Status",
+                        ["ABERTO","VENCIDO","PAGO","CANCELADO"],
+                        index=(["ABERTO","VENCIDO","PAGO","CANCELADO"].index(rec["receb_status"]) if rec is not None else 0),
+                        key=f"rec_st_{fase_id}"
+                    )
+                    vb = st.number_input(
+                        "Valor base (R$)",
+                        min_value=0.0, step=100.0,
+                        value=(float(rec["valor_base"]) if rec is not None else float(f["valor_fase"])),
+                        key=f"rec_vb_{fase_id}"
+                    )
+                    ac = st.number_input(
+                        "Acréscimo (R$)",
+                        min_value=0.0, step=50.0,
+                        value=(float(rec["acrescimo"]) if rec is not None else 0.0),
+                        key=f"rec_ac_{fase_id}"
+                    )
+                    venc = st.date_input(
+                        "Vencimento (opcional)",
+                        value=(rec["vencimento_em"] if rec is not None and rec["vencimento_em"] is not None else date.today()),
+                        key=f"rec_venc_{fase_id}"
+                    )
+                    pago = st.date_input(
+                        "Pago em (se PAGO)",
+                        value=(rec["pago_em"] if rec is not None and rec["pago_em"] is not None else date.today()),
+                        key=f"rec_pago_{fase_id}"
+                    )
+    
+                    salvar = st.form_submit_button("Salvar recebimento", type="primary", use_container_width=True)
+                    if salvar:
+                        if rec is None:
+                            exec_sql("""
+                                insert into public.recebimentos
+                                (obra_id, obra_fase_id, orcamento_id, status, valor_base, acrescimo, vencimento_em, pago_em)
+                                values (%s,%s,%s,%s,%s,%s,%s,%s);
+                            """, (obra_id, fase_id, int(orc_id), status, float(vb), float(ac), venc, (pago if status=='PAGO' else None)))
+                            st.success("Recebimento criado.")
+                            st.rerun()
+                        else:
+                            exec_sql("""
+                                update public.recebimentos
+                                set status=%s, valor_base=%s, acrescimo=%s,
+                                    vencimento_em=%s,
+                                    pago_em=%s
+                                where id=%s;
+                            """, (status, float(vb), float(ac), venc, (pago if status=='PAGO' else None), int(rec["receb_id"])))
+                            st.success("Recebimento atualizado.")
+                            st.rerun()
+
 # ======================================================
 # SEPOL - V1.2 Novas funcionalidades estáveis
 # ======================================================
