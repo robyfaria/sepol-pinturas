@@ -354,25 +354,28 @@ if menu == "CLIENTES":
             with c3:
                 origem = st.selectbox("Origem", ["PROPRIO", "INDICADO"], index=0)
 
-            end = st.text_input("Endereço (opcional)")
-
-            indicacao_id = None
-            if origem == "INDICADO":
-                ids = df_ind_ativos["id"].tolist()
-                if not ids:
-                    st.warning("Não há indicações ativas. Cadastre uma indicação acima.")
-                else:
-                    indicacao_id = st.selectbox("Quem indicou", ids, format_func=indic_fmt)
-
+            # Mostra sempre (porque em form não re-renderiza condicional)
+            ids = df_ind_ativos["id"].tolist()
+            opcoes = [None] + ids
+            indicacao_id = st.selectbox(
+                "Quem indicou (apenas se Origem = INDICADO)",
+                opcoes,
+                format_func=lambda x: "—" if x is None else indic_fmt(x),
+            )
+            
             salvar = st.form_submit_button("Salvar cliente", type="primary", use_container_width=True)
             if salvar:
                 if not nome.strip():
                     st.warning("Informe o nome.")
                     st.stop()
-                if origem == "INDICADO" and not indicacao_id:
-                    st.warning("Selecione quem indicou.")
-                    st.stop()
-
+            
+                if origem == "INDICADO":
+                    if indicacao_id is None:
+                        st.warning("Selecione quem indicou.")
+                        st.stop()
+                else:
+                    indicacao_id = None  # garante nulo se PROPRIO
+            
                 exec_sql(
                     """
                     insert into public.clientes (nome,telefone,endereco,origem,indicacao_id,ativo)
@@ -402,24 +405,24 @@ if menu == "CLIENTES":
                     index=["PROPRIO", "INDICADO"].index(r["origem"]),
                     key="cli_origem_edit",
                 )
-
-            end = st.text_input("Endereço (opcional)", value=r["endereco"] or "", key="cli_end_edit")
-
-            indicacao_id = None
-            if origem == "INDICADO":
+                
                 ids = df_ind_ativos["id"].tolist()
-                if not ids:
-                    st.warning("Não há indicações ativas. Cadastre uma indicação acima.")
-                else:
-                    default = int(r["indicacao_id"]) if pd.notna(r["indicacao_id"]) else ids[0]
-                    idx = ids.index(default) if default in ids else 0
-                    indicacao_id = st.selectbox(
-                        "Quem indicou",
-                        ids,
-                        index=idx,
-                        format_func=indic_fmt,
-                        key="cli_ind_edit",
-                    )
+                opcoes = [None] + ids
+                
+                default_sel = None
+                if pd.notna(r["indicacao_id"]):
+                    default_sel = int(r["indicacao_id"])
+                
+                # tenta manter a seleção atual
+                idx = opcoes.index(default_sel) if default_sel in opcoes else 0
+                
+                indicacao_id = st.selectbox(
+                    "Quem indicou (apenas se Origem = INDICADO)",
+                    opcoes,
+                    index=idx,
+                    format_func=lambda x: "—" if x is None else indic_fmt(x),
+                    key="cli_ind_edit_any",
+                )
 
             b1, b2 = st.columns(2)
             with b1:
@@ -431,10 +434,14 @@ if menu == "CLIENTES":
                 if not nome.strip():
                     st.warning("Informe o nome.")
                     st.stop()
-                if origem == "INDICADO" and not indicacao_id:
-                    st.warning("Selecione quem indicou.")
-                    st.stop()
-
+            
+                if origem == "INDICADO":
+                    if indicacao_id is None:
+                        st.warning("Selecione quem indicou.")
+                        st.stop()
+                else:
+                    indicacao_id = None
+            
                 exec_sql(
                     """
                     update public.clientes
@@ -444,10 +451,6 @@ if menu == "CLIENTES":
                     (nome.strip(), tel.strip() or None, end.strip() or None, origem, indicacao_id, int(edit_cli_id)),
                 )
                 st.success("Cliente atualizado.")
-                st.session_state["edit_cliente"] = None
-                st.rerun()
-
-            if cancelar:
                 st.session_state["edit_cliente"] = None
                 st.rerun()
 
