@@ -804,7 +804,17 @@ if menu == "OBRAS":
 
     # Atualiza clientes (caso tenha criado cliente rápido)
     df_cli_ativos = safe_df("select id, nome from public.clientes where ativo=true order by nome;")
-    cli_ids = df_cli_ativos["id"].tolist()
+
+    if df_cli_ativos.empty:
+        st.warning("Não existe nenhum Cliente ativa cadastrado ainda.")
+        ids = []
+    else:
+        # garante colunas
+        if "id" not in df_cli_ativos.columns:
+            st.error(f"Erro: coluna 'id' não veio na consulta. Colunas disponíveis: {list(df_cli_ativos.columns)}")
+            st.stop()
+        # Mostra sempre (porque em form não re-renderiza condicional)   
+        cli_ids = [int(x) for x in df_cli_ativos["id"].tolist()]
 
     if not cli_ids:
         st.warning("Cadastre pelo menos um cliente ativo.")
