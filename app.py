@@ -753,7 +753,7 @@ if menu == "OBRAS":
                     "Quem indicou? (Cliente Rápido - Apenas se Origem = INDICADO)",
                     options=[None] + ids,  # sempre lista python
                     index=0,
-                    format_func=lambda x: "—" if x is None else map_ind.get(int(x), f"ID {x}")
+                    format_func=lambda x: "—" if x is None else map_ind.get(int(x), f"ID {x}"),
                     key="obra_cli_indicacao_id",
                     disabled=(len(ids)==0),
                 )
