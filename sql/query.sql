@@ -80,7 +80,7 @@ update public.pessoas set ativo=%(ativo)s where id=%(id)s;
 -- =========================
 
 -- name: q_obras
-select o.id, o.cliente_id, o.titulo, o.status, o.ativo, o.criado_em,
+select o.id, o.cliente_id, o.endereco_obra, o.titulo, o.status, o.ativo, o.criado_em,
        c.nome as cliente_nome
 from public.obras o
 join public.clientes c on c.id=o.cliente_id
@@ -124,4 +124,5 @@ select public.fn_marcar_pagamento_pago(%(pagamento_id)s, %(usuario)s, %(data_pg)
 
 -- name: call_estornar_pagamento
 select public.fn_estornar_pagamento(%(pagamento_id)s, %(usuario)s, %(motivo)s);
+
 
