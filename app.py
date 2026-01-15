@@ -13,6 +13,10 @@ from utils.functions import (
 )
 
 st.set_page_config(page_title="SEPOL - Pinturas", layout="wide")
+with col_title:
+    st.markdown("## 🏗️ SEPOL - Controle de Obras")
+with col_logo:
+    st.image("assets/logo.png", use_container_width=True) if False else None
 
 # =========================
 # Auth
@@ -27,7 +31,7 @@ usuario = auth["usuario"]
 menu_atual = apply_pending_nav("HOME")
 
 with st.sidebar:
-    st.image("assets/logo.png", width=140) if False else None  # opcional: crie assets/logo.png
+    st.image("assets/logo.png", width=140) if True else None  # opcional: crie assets/logo.png
     st.markdown("### SEPOL")
     st.caption(f"Logado: **{usuario}** ({perfil})")
 
