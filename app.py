@@ -83,7 +83,7 @@ if menu == "HOME":
     # BLOCO 1: ALOCAÇÕES DO DIA
     # -------------------------
     st.markdown("## 📌 Alocações de hoje")
-    df_aloc = safe_df(sql("q_alocacoes_hoje"))
+    df_aloc = safe_df("q_alocacoes_hoje")
 
     if df_aloc.empty:
         st.info("Nenhuma alocação para hoje.")
@@ -105,7 +105,7 @@ if menu == "HOME":
     # BLOCO 2: PAGAMENTOS PARA SEXTA
     # -------------------------
     st.markdown("## 💸 Pagamentos previstos para sexta")
-    df_sexta = safe_df(sql("q_pagamentos_para_sexta"))
+    df_sexta = safe_df("q_pagamentos_para_sexta")
 
     if df_sexta.empty:
         st.success("Nada previsto para pagar na sexta ✅")
