@@ -94,7 +94,7 @@ if menu == "HOME":
             dft = df_aloc[df_aloc["tipo"].fillna("—") == t].copy()
             st.markdown(f"### {t}")
             st.dataframe(
-                dft[["profissional", "tipo_profissional", "obra", "observacao"]],
+                dft[["profissional", "tipo", "obra", "observacao"]],
                 use_container_width=True,
                 hide_index=True,
             )
