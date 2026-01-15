@@ -1800,12 +1800,12 @@ if menu == "OBRAS":
                     )
                     venc = st.date_input(
                         "Vencimento (opcional)",
-                        value=(rec["vencimento"] if rec is not None and rec["vencimento"] is not None else date.today()),
+                        value=(rec["vencimento"] if rec is not None and rec["vencimento"] is not None else None),
                         key=f"rec_venc_{fase_id}"
                     )
                     pago = st.date_input(
                         "Pago em (se PAGO)",
-                        value=(rec["recebido_em"] if rec is not None and rec["recebido_em"] is not None else date.today()),
+                        value=(rec["recebido_em"] if rec is not None and rec["recebido_em"] is not None else None),
                         key=f"rec_pago_{fase_id}"
                     )
     
@@ -1814,9 +1814,9 @@ if menu == "OBRAS":
                         if rec is None:
                             exec_sql("""
                                 insert into public.recebimentos
-                                (obra_id, obra_fase_id, orcamento_id, status, valor_previsto, acrescimo, vencimento, recebido_em)
-                                values (%s,%s,%s,%s,%s,%s,%s,%s);
-                            """, (obra_id, fase_id, int(orc_id), status, float(vb), float(ac), venc, (pago if status=='PAGO' else None)))
+                                (obra_fase_id, orcamento_id, status, valor_previsto, acrescimo, vencimento, recebido_em)
+                                values (%s,%s,%s,%s,%s,%s,%s);
+                            """, (fase_id, int(orc_id), status, float(vb), float(ac), venc, (pago if status=='PAGO' else None)))
                             st.success("Recebimento criado.")
                             st.rerun()
                         else:
