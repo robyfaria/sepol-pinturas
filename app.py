@@ -298,14 +298,158 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 # =========================
-# CONFIG (ADMIN only)
+# CONFIG (ADMIN)
 # =========================
 if menu == "CONFIG" and perfil == "ADMIN":
-    st.title("⚙️ Configuracoes")
-    st.caption("Logs de auditoria + gestao de usuarios")
-
+    st.subheader("⚙️ Configurações")
+    st.caption("Gestão de usuários do sistema (ADMIN/OPERAÇÃO).")
+    
+    # --------- Helpers UI ----------
+    def refresh_users():
+        st.session_state["users_df"] = safe_df(sql("q_users"))
+    
+    if "users_df" not in st.session_state:
+        refresh_users()
+    
+    df_users = st.session_state["users_df"]
+    
+    # --------- Criar usuário ----------
+    st.markdown("## 1) Criar novo usuário")
+    with st.form("form_user_create", clear_on_submit=True):
+        c1, c2, c3 = st.columns([3, 2, 2])
+        with c1:
+            new_usuario = st.text_input("Usuário", placeholder="ex: maria")
+        with c2:
+            new_perfil = st.selectbox("Perfil", ["ADMIN", "OPERACAO"], index=1)
+        with c3:
+            new_senha = st.text_input("Senha inicial", type="password", placeholder="defina uma senha")
+    
+        criar = st.form_submit_button("Criar usuário", type="primary", use_container_width=True)
+        if criar:
+            if not new_usuario.strip():
+                st.warning("Informe o usuário.")
+                st.stop()
+            if not new_senha.strip() or len(new_senha.strip()) < 6:
+                st.warning("Defina uma senha com pelo menos 6 caracteres.")
+                st.stop()
+    
+            try:
+                qexec(sql("i_user"), {
+                    "usuario": new_usuario.strip().lower(),
+                    "senha": new_senha.strip(),
+                    "perfil": new_perfil,
+                })
+                st.success("Usuário criado.")
+                refresh_users()
+                st.rerun()
+            except Exception as e:
+                st.error("Falha ao criar usuário (talvez já exista).")
+                st.exception(e)
+    
+    st.divider()
+    
+    # --------- Lista e ações ----------
+    st.markdown("## 2) Usuários cadastrados")
+    if df_users.empty:
+        st.info("Nenhum usuário ainda.")
+        st.stop()
+    
+    # seleção simples
+    ids = df_users["id"].tolist()
+    sel_id = st.selectbox(
+        "Selecionar usuário",
+        options=ids,
+        format_func=lambda x: f"{df_users.loc[df_users['id']==x,'usuario'].iloc[0]} • {df_users.loc[df_users['id']==x,'perfil'].iloc[0]} • {'ATIVO' if bool(df_users.loc[df_users['id']==x,'ativo'].iloc[0]) else 'INATIVO'}",
+        key="cfg_user_sel",
+    )
+    
+    user_row = df_users[df_users["id"] == sel_id].iloc[0]
+    u_usuario = user_row["usuario"]
+    u_perfil = user_row["perfil"]
+    u_ativo = bool(user_row["ativo"])
+    
+    cA, cB, cC, cD = st.columns([3, 2, 2, 3])
+    with cA:
+        st.metric("Usuário", str(u_usuario))
+    with cB:
+        st.metric("Perfil", str(u_perfil))
+    with cC:
+        st.metric("Status", "ATIVO" if u_ativo else "INATIVO")
+    with cD:
+        st.caption("Ações rápidas")
+    
+    col1, col2 = st.columns(2)
+    
+    # ---- Ativar/Inativar ----
+    with col1:
+        label = "Inativar" if u_ativo else "Ativar"
+        if st.button(label, use_container_width=True):
+            try:
+                qexec(sql("u_user_set_ativo"), {"id": sel_id, "ativo": (not u_ativo)})
+                st.success("Atualizado.")
+                refresh_users()
+                st.rerun()
+            except Exception as e:
+                st.error("Falha ao atualizar status.")
+                st.exception(e)
+    
+    # ---- Reset senha ----
+    with col2:
+        if st.button("Resetar senha", type="primary", use_container_width=True):
+            st.session_state["reset_user_id"] = sel_id
+            st.session_state["reset_user_nome"] = u_usuario
+            st.session_state["reset_open"] = True
+    
+    # Modal simples (sem st.dialog, para compatibilidade)
+    if st.session_state.get("reset_open"):
+        st.divider()
+        st.markdown(f"### 🔑 Resetar senha — **{st.session_state.get('reset_user_nome','')}**")
+    
+        with st.form("form_reset_senha", clear_on_submit=True):
+            nova1 = st.text_input("Nova senha", type="password")
+            nova2 = st.text_input("Confirmar nova senha", type="password")
+    
+            b1, b2 = st.columns(2)
+            with b1:
+                ok = st.form_submit_button("Salvar nova senha", type="primary", use_container_width=True)
+            with b2:
+                cancel = st.form_submit_button("Cancelar", use_container_width=True)
+    
+            if cancel:
+                st.session_state["reset_open"] = False
+                st.rerun()
+    
+            if ok:
+                if not nova1 or len(nova1) < 6:
+                    st.warning("Senha deve ter pelo menos 6 caracteres.")
+                    st.stop()
+                if nova1 != nova2:
+                    st.warning("As senhas não conferem.")
+                    st.stop()
+    
+                try:
+                    qexec(sql("u_user_reset_senha"), {"id": st.session_state["reset_user_id"], "senha": nova1})
+                    st.success("Senha atualizada.")
+                    st.session_state["reset_open"] = False
+                    refresh_users()
+                    st.rerun()
+                except Exception as e:
+                    st.error("Falha ao resetar senha.")
+                    st.exception(e)
+    
+    st.divider()
+    
+    # tabela 60+ (visível)
+    st.markdown("## 3) Visão geral")
+    st.dataframe(
+        df_users[["usuario", "perfil", "ativo", "criado_em"]],
+        use_container_width=True,
+        hide_index=True
+    )
+    
+    st.divider()
+    
+    # Auditoria do BD
     st.markdown("## Auditoria (ultimos 200)")
     df = safe_df("q_auditoria_ultimos", {"limite": 200})
     st.dataframe(df, use_container_width=True, hide_index=True)
-
-    st.info("Gestao de usuarios (criar/resetar senha) ficara disponivel aqui.")
