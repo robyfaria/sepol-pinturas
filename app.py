@@ -373,7 +373,7 @@ if menu == "OBRAS":
                     qexec("u_obra", payload)
                     st.success("Obra atualizada.")
                 else:
-                    qexec("i_obra), payload)
+                    qexec("i_obra"), payload)
                     st.success("Obra criada.")
                 reset_obra_form()
                 st.rerun()
