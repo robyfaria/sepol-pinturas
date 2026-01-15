@@ -13,6 +13,7 @@ from utils.functions import (
 )
 
 st.set_page_config(page_title="SEPOL - Pinturas", layout="wide")
+col_title, col_log = ([6,1])
 with col_title:
     st.markdown("## 🏗️ SEPOL - Controle de Obras")
 with col_logo:
