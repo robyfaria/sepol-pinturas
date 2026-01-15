@@ -373,7 +373,7 @@ if menu == "OBRAS":
                     qexec("u_obra", payload)
                     st.success("Obra atualizada.")
                 else:
-                    qexec("i_obra"), payload)
+                    qexec("i_obra", payload)
                     st.success("Obra criada.")
                 reset_obra_form()
                 st.rerun()
@@ -522,7 +522,7 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
     st.markdown("## 2) Pagar (pendentes)")
     data_pg = st.date_input("Data do pagamento", value=date.today(), key="fin_data_pg")
 
-    df_pend = safe_df(sql("q_pagamentos_pendentes"))
+    df_pend = safe_df("q_pagamentos_pendentes")
     if df_pend.empty:
         st.info("Nenhum pagamento pendente (ABERTO).")
     else:
@@ -554,7 +554,7 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
                     with c3:
                         # detalhes (itens)
                         if st.button("Ver itens", key=f"fin_itens_{pid}", use_container_width=True):
-                            dfi = safe_df(sql("q_pagamento_itens"), {"pagamento_id": pid})
+                            dfi = safe_df("q_pagamento_itens", {"pagamento_id": pid})
                             if dfi.empty:
                                 st.info("Sem itens detalhados.")
                             else:
@@ -563,7 +563,7 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
                         if st.button("Marcar como PAGO", type="primary", key=f"fin_pagar_{pid}", use_container_width=True):
                             try:
                                 qexec(
-                                    sql("call_marcar_pagamento_pago"),
+                                    "call_marcar_pagamento_pago",
                                     {"pagamento_id": pid, "usuario": usuario, "data_pagamento": data_pg},
                                 )
                                 st.success(f"Pago: #{pid}")
@@ -580,7 +580,7 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
     st.markdown("## 3) Estornar (apenas pagos)")
     st.caption("Use estorno para corrigir erro bancário/lançamento. Sempre informe o motivo.")
 
-    df_pago = safe_df(sql("q_pagamentos_pagos_30d"))
+    df_pago = safe_df("q_pagamentos_pagos_30d")
 
     if df_pago.empty:
         st.info("Nenhum pagamento PAGO nos últimos 30 dias.")
@@ -625,7 +625,7 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
                         st.stop()
                     try:
                         qexec(
-                            sql("call_estornar_pagamento"),
+                            "call_estornar_pagamento",
                             {"pagamento_id": int(pid), "usuario": usuario, "motivo": motivo.strip()},
                         )
                         st.success(f"Estornado: #{int(pid)} (voltou para ABERTO)")
