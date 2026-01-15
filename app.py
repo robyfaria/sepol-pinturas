@@ -250,33 +250,243 @@ if menu == "CADASTROS":
 # OBRAS
 # =========================
 if menu == "OBRAS":
-    st.title("🏗️ Obras")
-    st.caption("Acompanhe as obras e detalhes principais.")
+    st.subheader("🏗️ Obras")
+    st.caption("Criar e editar obras. (Status é o principal; Ativo serve para arquivar/ocultar depois.)")
 
-    df = safe_df("q_obras")
-    if df.empty:
-        st.info("Nenhuma obra cadastrada ainda.")
-    else:
-        obra_ids = df["id"].tolist()
-        if "obra_sel" not in st.session_state or st.session_state["obra_sel"] not in obra_ids:
-            st.session_state["obra_sel"] = int(obra_ids[0])
-        obra_sel = st.selectbox(
-            "Obra selecionada",
-            obra_ids,
-            index=obra_ids.index(st.session_state["obra_sel"]),
-            format_func=lambda x: f"#{int(x)} • {df.loc[df['id']==x,'titulo'].iloc[0]}",
-            key="obra_sel",
+    # helpers
+    def reset_obra_form():
+        for k in ["obra_cliente_id", "obra_titulo", "obra_end", "obra_status", "obra_ativo"]:
+            if k in st.session_state:
+                st.session_state.pop(k, None)
+        st.session_state["obra_edit_id"] = None
+
+    if "obra_edit_id" not in st.session_state:
+        st.session_state["obra_edit_id"] = None
+
+    df_cli = safe_df("q_clientes_ativos")
+    if df_cli.empty:
+        st.info("Cadastre um Cliente primeiro em CADASTROS.")
+        st.stop()
+
+    df_obras = safe_df("q_obras")
+
+    # =========================
+    # FORM (Criar / Editar)
+    # =========================
+    edit_id = st.session_state["obra_edit_id"]
+    modo = "Editar obra" if edit_id else "Nova obra"
+    st.markdown(f"## ✍️ {modo}")
+
+    # carregar registro para edição
+    rec = None
+    if edit_id:
+        df_one = df_obras[df_obras["id"] == int(edit_id)]
+        if not df_one.empty:
+            rec = df_one.iloc[0]
+        else:
+            st.warning("Obra não encontrada. Voltando para modo Novo.")
+            st.session_state["obra_edit_id"] = None
+            edit_id = None
+
+    # defaults (sem travar o session_state depois do widget)
+    cli_ids = df_cli["id"].astype(int).tolist()
+    default_cli = int(rec["cliente_id"]) if rec is not None else cli_ids[0]
+    if default_cli not in cli_ids:
+        default_cli = cli_ids[0]
+
+    status_opts = ["AGUARDANDO", "INICIADO", "PAUSADO", "CANCELADO", "CONCLUIDO"]
+    default_status = (rec["status"] if rec is not None else "AGUARDANDO")
+    if default_status not in status_opts:
+        default_status = "AGUARDANDO"
+
+    with st.form("form_obra", clear_on_submit=False):
+        c1, c2 = st.columns([4, 2])
+        with c1:
+            cliente_id = st.selectbox(
+                "Cliente",
+                options=cli_ids,
+                index=cli_ids.index(default_cli),
+                format_func=lambda x: df_cli.loc[df_cli["id"] == x, "nome"].iloc[0],
+                key="obra_cliente_id",
+            )
+        with c2:
+            status = st.selectbox(
+                "Status",
+                options=status_opts,
+                index=status_opts.index(default_status),
+                key="obra_status",
+            )
+
+        titulo = st.text_input(
+            "Título da obra",
+            value=(rec["titulo"] if rec is not None else ""),
+            key="obra_titulo",
+            placeholder="Ex: Apto 1201 - Reforma",
+        )
+        endereco = st.text_input(
+            "Endereço (opcional)",
+            value=(rec["endereco_obra"] if rec is not None and rec["endereco_obra"] else ""),
+            key="obra_end",
+            placeholder="Rua / bairro",
         )
 
-        st.subheader("Detalhes")
-        obra_df = df.loc[df["id"] == int(obra_sel)]
-        d = obra_df.iloc[0] if not obra_df.empty else {}
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Cliente", d.get("cliente_nome", ""))
-        c2.metric("Status", d.get("status", ""))
-        c3.metric("Ativo", "SIM" if d.get("ativo") else "NAO")
+        # ativo: só para arquivar/ocultar, mas deixa claro
+        ativo_default = bool(rec["ativo"]) if rec is not None else True
+        ativo = st.checkbox(
+            "Ativo (desmarque para arquivar/ocultar)",
+            value=ativo_default,
+            key="obra_ativo",
+        )
 
-        st.info("Mais opcoes desta obra aparecem conforme os cadastros forem preenchidos.")
+        b1, b2, b3 = st.columns([2, 2, 2])
+        with b1:
+            salvar = st.form_submit_button("Salvar", type="primary", use_container_width=True)
+        with b2:
+            cancelar = st.form_submit_button("Cancelar edição", use_container_width=True, disabled=(not edit_id))
+        with b3:
+            limpar = st.form_submit_button("Limpar", use_container_width=True)
+
+        if limpar:
+            reset_obra_form()
+            st.rerun()
+
+        if cancelar:
+            reset_obra_form()
+            st.rerun()
+
+        if salvar:
+            if not str(titulo).strip():
+                st.warning("Informe o título da obra.")
+                st.stop()
+
+            payload = {
+                "cliente_id": int(cliente_id),
+                "titulo": str(titulo).strip(),
+                "endereco_obra": (str(endereco).strip() or None),
+                "status": status,
+                "ativo": bool(ativo),
+            }
+
+            try:
+                if edit_id:
+                    payload["id"] = int(edit_id)
+                    qexec("u_obra", payload)
+                    st.success("Obra atualizada.")
+                else:
+                    qexec("i_obra), payload)
+                    st.success("Obra criada.")
+                reset_obra_form()
+                st.rerun()
+            except Exception as e:
+                st.error("Falha ao salvar a obra.")
+                st.exception(e)
+
+    st.divider()
+
+    # =========================
+    # LISTA (60+)
+    # =========================
+    st.markdown("## 📋 Lista de Obras")
+
+    if df_obras.empty:
+        st.info("Nenhuma obra cadastrada ainda.")
+        st.stop()
+
+    # filtro simples (opcional, ajuda 60+)
+    cF1, cF2 = st.columns([3, 2])
+    with cF1:
+        f_txt = st.text_input("Buscar por título/cliente", value="", placeholder="digite para filtrar...")
+    with cF2:
+        f_somente_ativas = st.checkbox("Mostrar só ativas", value=True)
+
+    df_view = df_obras.copy()
+    if f_somente_ativas:
+        df_view = df_view[df_view["ativo"] == True]
+
+    if f_txt.strip():
+        t = f_txt.strip().lower()
+        df_view = df_view[
+            df_view["titulo"].astype(str).str.lower().str.contains(t)
+            | df_view["cliente_nome"].astype(str).str.lower().str.contains(t)
+        ]
+
+    if df_view.empty:
+        st.info("Nenhuma obra com esse filtro.")
+        st.stop()
+
+    for _, r in df_view.iterrows():
+        rid = int(r["id"])
+        colA, colB, colC, colD = st.columns([6, 2, 2, 2])
+
+        with colA:
+            st.write(f"**#{rid} — {r['titulo']}**")
+            st.caption(f"Cliente: {r['cliente_nome']} • Status: {r['status']} • {'ATIVA' if bool(r['ativo']) else 'ARQUIVADA'}")
+
+        with colB:
+            if st.button("Editar", key=f"obra_edit_{rid}", use_container_width=True):
+                st.session_state["obra_edit_id"] = rid
+                # não chamamos rerun dentro de callback; aqui é execução normal
+                st.rerun()
+
+        with colC:
+            # atalho 60+: mudar status para INICIADO/CONCLUIDO
+            quick = st.selectbox(
+                "Status rápido",
+                ["—", "INICIADO", "PAUSADO", "CONCLUIDO"],
+                index=0,
+                key=f"obra_quick_{rid}",
+                label_visibility="collapsed",
+            )
+            if quick != "—":
+                try:
+                    qexec("u_obra", {
+                        "id": rid,
+                        "cliente_id": int(r["cliente_id"]),
+                        "titulo": str(r["titulo"]),
+                        "endereco_obra": (str(r["endereco_obra"]) if r["endereco_obra"] else None),
+                        "status": quick,
+                        "ativo": bool(r["ativo"]),
+                    })
+                    st.success(f"Status atualizado: {quick}")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Falha ao atualizar status.")
+                    st.exception(e)
+
+        with colD:
+            # arquivar/reativar lado a lado com editar (como você gosta)
+            if bool(r["ativo"]):
+                if st.button("Arquivar", key=f"obra_arch_{rid}", use_container_width=True):
+                    try:
+                        qexec("u_obra", {
+                            "id": rid,
+                            "cliente_id": int(r["cliente_id"]),
+                            "titulo": str(r["titulo"]),
+                            "endereco_obra": (str(r["endereco_obra"]) if r["endereco_obra"] else None),
+                            "status": str(r["status"]),
+                            "ativo": False,
+                        })
+                        st.success("Obra arquivada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Falha ao arquivar.")
+                        st.exception(e)
+            else:
+                if st.button("Reativar", key=f"obra_unarch_{rid}", use_container_width=True):
+                    try:
+                        qexec("u_obra", {
+                            "id": rid,
+                            "cliente_id": int(r["cliente_id"]),
+                            "titulo": str(r["titulo"]),
+                            "endereco_obra": (str(r["endereco_obra"]) if r["endereco_obra"] else None),
+                            "status": str(r["status"]),
+                            "ativo": True,
+                        })
+                        st.success("Obra reativada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Falha ao reativar.")
+                        st.exception(e)
 
 # =========================
 # FINANCEIRO (ADMIN only)
