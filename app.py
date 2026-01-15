@@ -58,7 +58,7 @@ if menu == "HOME":
     # Se existir a view home_hoje_kpis e você já usa, mantenha.
     # Caso contrário, pode remover esse trecho.
     try:
-        kpi = safe_df("select * from public.home_hoje_kpis;")
+        kpi = safe_df("q_home_kpis")
         if not kpi.empty:
             r = kpi.iloc[0]
             c1, c2, c3, c4, c5 = st.columns(5)
