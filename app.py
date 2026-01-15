@@ -575,8 +575,8 @@ if menu == "CLIENTES":
                     st.stop()
                 # Mostra sempre (porque em form não re-renderiza condicional)
                 ids = [int(x) for x in df_ind_ativos["id"].tolist()]
-
-            map_ind_cli = dict(zip(df_ind_ativos["id"], df_ind_ativos["nome"]))
+                map_ind_cli = dict(zip(df_ind_ativos["id"], df_ind_ativos["nome"]))
+                
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Clientes - Apenas se Origem = INDICADO)",
@@ -887,8 +887,8 @@ if menu == "OBRAS":
                     st.stop()
                 # Mostra sempre (porque em form não re-renderiza condicional)   
                 ids = [int(x) for x in df_ind_ativos["id"].tolist()]
-
-            map_ind = dict(zip(df_ind_ativos["id"], df_ind_ativos["nome"]))
+                map_ind = dict(zip(df_ind_ativos["id"], df_ind_ativos["nome"]))
+                
             if ids:
                 indicacao_id = st.selectbox(
                     "Quem indicou? (Cliente Rápido - Apenas se Origem = INDICADO)",
