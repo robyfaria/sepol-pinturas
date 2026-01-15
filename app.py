@@ -17,7 +17,7 @@ col_title, col_log = st.columns([6,1])
 with col_title:
     st.markdown("## 🏗️ SEPOL - Controle de Obras")
 with col_log:
-    st.image("assets/logo.png", use_container_width=True) if True else None
+    st.image("assets/logo.png", use_container_width=True)
 
 # =========================
 # Auth
@@ -32,7 +32,6 @@ usuario = auth["usuario"]
 menu_atual = apply_pending_nav("HOME")
 
 with st.sidebar:
-    st.image("assets/logo.png", width=140) if True else None  # opcional: crie assets/logo.png
     st.markdown("### SEPOL")
     st.caption(f"Logado: **{usuario}** ({perfil})")
 
