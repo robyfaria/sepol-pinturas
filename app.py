@@ -101,15 +101,14 @@ if menu == "CADASTROS":
         edit_id = st.session_state["edit_cliente_id"]
         row = None
         if edit_id:
-            df_one = safe_df("q_cliente_by_id", {"id": int(edit_id)})
+            df_one = safe_df("q_clientes")
+            df_one = df_one.loc[df_one["id"] == int(edit_id)]
             row = df_one.iloc[0] if not df_one.empty else None
 
         with st.form("cliente_form", clear_on_submit=True):
             nome = st.text_input("Nome", value=(row["nome"] if row is not None else ""))
             telefone = st.text_input("Telefone (opcional)", value=(row.get("telefone") if row is not None else "") or "")
             endereco = st.text_input("Endereco (opcional)", value=(row.get("endereco") if row is not None else "") or "")
-            ativo = st.checkbox("Ativo", value=(bool(row.get("ativo")) if row is not None else True))
-
             c1, c2, c3 = st.columns(3)
             salvar = c1.form_submit_button("Salvar", type="primary", use_container_width=True)
             cancelar = c2.form_submit_button("Cancelar edicao", use_container_width=True, disabled=(edit_id is None))
@@ -120,10 +119,10 @@ if menu == "CADASTROS":
                     st.warning("Informe o nome.")
                     st.stop()
                 if edit_id is None:
-                    qexec("i_cliente", {"nome": nome.strip(), "telefone": telefone.strip() or None, "endereco": endereco.strip() or None, "ativo": ativo})
+                    qexec("i_cliente", {"nome": nome.strip(), "telefone": telefone.strip() or None, "endereco": endereco.strip() or None})
                     st.success("Cliente cadastrado!")
                 else:
-                    qexec("u_cliente", {"id": int(edit_id), "nome": nome.strip(), "telefone": telefone.strip() or None, "endereco": endereco.strip() or None, "ativo": ativo})
+                    qexec("u_cliente", {"id": int(edit_id), "nome": nome.strip(), "telefone": telefone.strip() or None, "endereco": endereco.strip() or None})
                     st.success("Cliente atualizado!")
                     st.session_state["edit_cliente_id"] = None
                 st.rerun()
@@ -154,7 +153,7 @@ if menu == "CADASTROS":
                         st.session_state["edit_cliente_id"] = rid
                         st.rerun()
                     if b2.button("Ativar/Inativar", key=f"cli_tg_{rid}"):
-                        qexec("toggle_cliente", {"id": rid})
+                        qexec("u_cliente_set_ativo", {"id": rid, "ativo": not bool(rr.get("ativo"))})
                         st.rerun()
 
     # ---------- PROFISSIONAIS ----------
@@ -167,7 +166,8 @@ if menu == "CADASTROS":
         edit_id = st.session_state["edit_prof_id"]
         row = None
         if edit_id:
-            df_one = safe_df("q_prof_by_id", {"id": int(edit_id)})
+            df_one = safe_df("q_pessoas")
+            df_one = df_one.loc[df_one["id"] == int(edit_id)]
             row = df_one.iloc[0] if not df_one.empty else None
 
         with st.form("prof_form", clear_on_submit=True):
@@ -179,8 +179,7 @@ if menu == "CADASTROS":
             )
             telefone = st.text_input("Telefone (opcional)", value=(row.get("telefone") if row is not None else "") or "")
             diaria = st.number_input("Diaria base (opcional)", min_value=0.0, step=10.0, value=float(row.get("diaria_base") or 0) if row is not None else 0.0)
-            ativo = st.checkbox("Ativo", value=(bool(row.get("ativo")) if row is not None else True))
-
+            observacao = st.text_area("Observacao (opcional)", value=(row.get("observacao") if row is not None else "") or "")
             c1, c2, c3 = st.columns(3)
             salvar = c1.form_submit_button("Salvar", type="primary", use_container_width=True)
             cancelar = c2.form_submit_button("Cancelar edicao", use_container_width=True, disabled=(edit_id is None))
@@ -192,26 +191,26 @@ if menu == "CADASTROS":
                     st.stop()
                 if edit_id is None:
                     qexec(
-                        "i_prof",
+                        "i_pessoa",
                         {
                             "nome": nome.strip(),
                             "tipo": tipo,
                             "telefone": telefone.strip() or None,
                             "diaria_base": float(diaria) if diaria > 0 else None,
-                            "ativo": ativo,
+                            "observacao": observacao.strip() or None,
                         },
                     )
                     st.success("Profissional cadastrado!")
                 else:
                     qexec(
-                        "u_prof",
+                        "u_pessoa",
                         {
                             "id": int(edit_id),
                             "nome": nome.strip(),
                             "tipo": tipo,
                             "telefone": telefone.strip() or None,
                             "diaria_base": float(diaria) if diaria > 0 else None,
-                            "ativo": ativo,
+                            "observacao": observacao.strip() or None,
                         },
                     )
                     st.success("Profissional atualizado!")
@@ -226,7 +225,7 @@ if menu == "CADASTROS":
                 st.rerun()
 
         st.divider()
-        df = safe_df("q_profissionais")
+        df = safe_df("q_pessoas")
         if df.empty:
             st.info("Nenhum profissional.")
         else:
@@ -244,7 +243,7 @@ if menu == "CADASTROS":
                         st.session_state["edit_prof_id"] = rid
                         st.rerun()
                     if b2.button("Ativar/Inativar", key=f"pr_tg_{rid}"):
-                        qexec("toggle_prof", {"id": rid})
+                        qexec("u_pessoa_set_ativo", {"id": rid, "ativo": not bool(rr.get("ativo"))})
                         st.rerun()
 
 # =========================
@@ -270,7 +269,8 @@ if menu == "OBRAS":
         )
 
         st.subheader("Detalhes")
-        d = safe_df("q_obra_by_id", {"id": int(obra_sel)}).iloc[0]
+        obra_df = df.loc[df["id"] == int(obra_sel)]
+        d = obra_df.iloc[0] if not obra_df.empty else {}
         c1, c2, c3 = st.columns(3)
         c1.metric("Cliente", d.get("cliente_nome", ""))
         c2.metric("Status", d.get("status", ""))
@@ -288,7 +288,7 @@ if menu == "FINANCEIRO" and perfil == "ADMIN":
     segunda = st.date_input("Segunda-feira", value=(date.today() - timedelta(days=date.today().weekday())))
     if st.button("Gerar pagamentos desta semana", type="primary", use_container_width=True):
         # A funcao no banco ja bloqueia reabrir pagamentos PAGO.
-        qexec("call_gerar_pag_semana", {"segunda": segunda})
+        qexec("call_gerar_pagamentos_semana", {"segunda": segunda})
         st.success("Pagamentos gerados/atualizados.")
         st.rerun()
 
