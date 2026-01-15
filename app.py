@@ -1923,16 +1923,27 @@ if menu == "APONTAMENTOS":
             with c7:
                 obs = st.text_input("Observação (opcional)")
 
+            df_orc_ap = safe_df(
+                "select id from public.orcamentos where obra_id=%s and status='APROVADO' limit 1;",
+                (int(obra_id),)
+            )
+            
+            if df_orc_ap.empty:
+                st.warning("Esta obra ainda não tem ORÇAMENTO APROVADO. Aprove um orçamento primeiro (Obras → Orçamentos).")
+                st.stop()
+            
+            orcamento_id = int(df_orc_ap.iloc[0]["id"])
+
             salvar = st.form_submit_button("Salvar apontamento", type="primary", use_container_width=True)
             if salvar:
                 try:
                     exec_sql(
                         """
                         insert into public.apontamentos
-                        (obra_id,pessoa_id,data,tipo_dia,valor_base,desconto_valor,observacao)
-                        values (%s,%s,%s,%s,%s,%s,%s);
+                        (obra_id,orcamento_id,pessoa_id,data,tipo_dia,valor_base,desconto_valor,observacao)
+                        values (%s,%s,%s,%s,%s,%s,%s,%s);
                         """,
-                        (int(obra_id), int(pessoa_id), data_ap, tipo_dia, float(valor_base), float(desconto), obs.strip() or None),
+                        (int(obra_id), int(orcamento_id), int(pessoa_id), data_ap, tipo_dia, float(valor_base), float(desconto), obs.strip() or None),
                     )
                     st.success("Apontamento salvo.")
                     st.rerun()
