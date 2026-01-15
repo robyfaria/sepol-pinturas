@@ -46,41 +46,124 @@ with st.sidebar:
 
 menu = st.session_state["menu"]
 
+# ======================================================
+# HOME (Dashboard 60+)
+# ======================================================
+if menu == "HOME":
+    st.subheader("🏠 Home (Hoje)")
+
+    # -------------------------
+    # KPIs (se você já tiver)
+    # -------------------------
+    # Se existir a view home_hoje_kpis e você já usa, mantenha.
+    # Caso contrário, pode remover esse trecho.
+    try:
+        kpi = safe_df("select * from public.home_hoje_kpis;")
+        if not kpi.empty:
+            r = kpi.iloc[0]
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("Hoje", str(r["hoje"]))
+            c2.metric("Sexta-alvo", str(r["sexta"]))
+            c3.metric("Fases em andamento", int(r["fases_em_andamento"]))
+            c4.metric("Receb. vencidos", int(r["recebimentos_vencidos_qtd"]))
+            c5.metric("A receber", brl(r["recebimentos_pendentes_total"]))
+
+            c6, c7 = st.columns(2)
+            c6.metric("Pagar na sexta", brl(r["pagar_na_sexta_total"]))
+            c7.metric("Extras pendentes", brl(r["extras_pendentes_total"]))
+        else:
+            st.info("Sem KPIs ainda (cadastre dados e lance movimentações).")
+    except Exception:
+        # sem travar a HOME se a view não existir
+        pass
+
+    st.divider()
+
+    # -------------------------
+    # BLOCO 1: ALOCAÇÕES DO DIA
+    # -------------------------
+    st.markdown("## 📌 Alocações de hoje")
+    df_aloc = safe_df(sql("q_alocacoes_hoje"))
+
+    if df_aloc.empty:
+        st.info("Nenhuma alocação para hoje.")
+    else:
+        # visão agrupada por tipo (INTERNO/EXTERNO), bem 60+
+        tipos = df_aloc["tipo"].fillna("—").unique().tolist()
+        for t in tipos:
+            dft = df_aloc[df_aloc["tipo"].fillna("—") == t].copy()
+            st.markdown(f"### {t}")
+            st.dataframe(
+                dft[["profissional", "tipo_profissional", "obra", "observacao"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    st.divider()
+
+    # -------------------------
+    # BLOCO 2: PAGAMENTOS PARA SEXTA
+    # -------------------------
+    st.markdown("## 💸 Pagamentos previstos para sexta")
+    df_sexta = safe_df(sql("q_pagamentos_para_sexta"))
+
+    if df_sexta.empty:
+        st.success("Nada previsto para pagar na sexta ✅")
+    else:
+        sexta_alvo = df_sexta.iloc[0]["sexta"] if "sexta" in df_sexta.columns else None
+        total = float(df_sexta["valor_total"].fillna(0).sum())
+        if sexta_alvo:
+            st.info(f"Sexta-alvo: **{sexta_alvo}** • Total previsto: **{brl(total)}**")
+        else:
+            st.info(f"Total previsto: **{brl(total)}**")
+
+        # tabela simples
+        st.dataframe(
+            df_sexta[["id", "profissional", "tipo", "valor_total", "referencia_inicio", "referencia_fim"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # atalho 60+ (sem callback / sem st.session_state set)
+        st.markdown("### 🔜 Atalho")
+        st.write("Para pagar, vá em **FINANCEIRO → Pagar (pendentes)**.")
+
+
 # =========================
 # HOME
 # =========================
-if menu == "HOME":
-    st.title("🏠 Home")
-    st.caption("Visao rapida")
+# if menu == "HOME":
+#     st.title("🏠 Home")
+#     st.caption("Visao rapida")
 
-    # KPIs (se as views existirem)
-    try:
-        kpi = safe_df("q_home_kpis")
-        r = kpi.iloc[0] if not kpi.empty else None
-        if r is not None:
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Hoje", str(r.get("hoje")))
-            c2.metric("Sexta", str(r.get("sexta")))
-            c3.metric("Fases em andamento", int(r.get("fases_em_andamento", 0)))
-            c4.metric("A receber", brl(r.get("recebimentos_pendentes_total", 0)))
-    except Exception:
-        st.info("KPIs ainda nao configurados neste banco.")
+#     # KPIs (se as views existirem)
+#     try:
+#         kpi = safe_df("q_home_kpis")
+#         r = kpi.iloc[0] if not kpi.empty else None
+#         if r is not None:
+#             c1, c2, c3, c4 = st.columns(4)
+#             c1.metric("Hoje", str(r.get("hoje")))
+#             c2.metric("Sexta", str(r.get("sexta")))
+#             c3.metric("Fases em andamento", int(r.get("fases_em_andamento", 0)))
+#             c4.metric("A receber", brl(r.get("recebimentos_pendentes_total", 0)))
+#     except Exception:
+#         st.info("KPIs ainda nao configurados neste banco.")
 
-    st.divider()
-    st.markdown("### Acoes rapidas")
-    cA, cB, cC = st.columns(3)
-    with cA:
-        if st.button("Apontamentos", type="primary", use_container_width=True):
-            goto("OBRAS")
-            st.rerun()
-    with cB:
-        if perfil == "ADMIN" and st.button("Financeiro", use_container_width=True):
-            goto("FINANCEIRO")
-            st.rerun()
-    with cC:
-        if st.button("Cadastros", use_container_width=True):
-            goto("CADASTROS")
-            st.rerun()
+#     st.divider()
+#     st.markdown("### Ações rápidas")
+#     cA, cB, cC = st.columns(3)
+#     with cA:
+#         if st.button("Apontamentos", type="primary", use_container_width=True):
+#             goto("OBRAS")
+#             st.rerun()
+#     with cB:
+#         if perfil == "ADMIN" and st.button("Financeiro", use_container_width=True):
+#             goto("FINANCEIRO")
+#             st.rerun()
+#     with cC:
+#         if st.button("Cadastros", use_container_width=True):
+#             goto("CADASTROS")
+#             st.rerun()
 
 # =========================
 # CADASTROS (clientes + profissionais numa tela)
