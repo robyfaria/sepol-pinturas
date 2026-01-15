@@ -17,7 +17,7 @@ col_title, col_log = st.columns([6,1])
 with col_title:
     st.markdown("## 🏗️ SEPOL - Controle de Obras")
 with col_log:
-    st.image("assets/logo.png", use_container_width=True) if False else None
+    st.image("assets/logo.png", use_container_width=True) if True else None
 
 # =========================
 # Auth
