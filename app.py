@@ -512,15 +512,18 @@ if menu == "OBRAS":
                 st.rerun()
 
         with colC:
-            # atalho 60+: mudar status para INICIADO/CONCLUIDO
+            key_quick = f"obra_quick_{rid}"
+        
             quick = st.selectbox(
                 "Status rápido",
                 ["—", "INICIADO", "PAUSADO", "CONCLUIDO"],
                 index=0,
-                key=f"obra_quick_{rid}",
+                key=key_quick,
                 label_visibility="collapsed",
             )
-            if quick != "—":
+        
+            # só aplica quando escolher algo diferente e diferente do status atual
+            if quick != "—" and quick != r["status"]:
                 try:
                     qexec("u_obra", {
                         "id": rid,
@@ -530,9 +533,15 @@ if menu == "OBRAS":
                         "status": quick,
                         "ativo": bool(r["ativo"]),
                     })
+        
+                    # ✅ RESET para não reexecutar no rerun
+                    st.session_state[key_quick] = "—"
+        
                     st.success(f"Status atualizado: {quick}")
                     st.rerun()
                 except Exception as e:
+                    # ✅ também reseta para não ficar preso num estado ruim
+                    st.session_state[key_quick] = "—"
                     st.error("Falha ao atualizar status.")
                     st.exception(e)
 
