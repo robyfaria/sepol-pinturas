@@ -218,9 +218,9 @@ if menu == "CADASTROS":
                 st.rerun()
 
         st.divider()
-        df = safe_df("q_clientes")
+        df = safe_df("q_clientes", {"ativo": True})
         if df.empty:
-            st.info("Nenhum cliente.")
+            st.info("Nenhum cliente ativo.")
         else:
             for _, rr in df.iterrows():
                 rid = int(rr["id"])
@@ -346,7 +346,7 @@ if menu == "OBRAS":
     if "obra_edit_id" not in st.session_state:
         st.session_state["obra_edit_id"] = None
 
-    df_cli = safe_df("q_clientes_ativos")
+    df_cli = safe_df("q_clientes")
     if df_cli.empty:
         st.info("Cadastre um Cliente primeiro em CADASTROS.")
         st.stop()
