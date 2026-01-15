@@ -488,24 +488,166 @@ if menu == "OBRAS":
                         st.error("Falha ao reativar.")
                         st.exception(e)
 
-# =========================
-# FINANCEIRO (ADMIN only)
-# =========================
+# ======================================================
+# FINANCEIRO (ADMIN only - gerar, pagar, estornar, histórico)
+# ======================================================
 if menu == "FINANCEIRO" and perfil == "ADMIN":
-    st.title("💰 Financeiro")
+    st.subheader("💰 Financeiro")
+    st.caption("Fluxo simples: 1) Gerar → 2) Pagar → 3) Se der problema, Estornar (com motivo).")
 
+    # -------------------------
+    # 1) GERAR PAGAMENTOS
+    # -------------------------
     st.markdown("## 1) Gerar pagamentos da semana")
-    segunda = st.date_input("Segunda-feira", value=(date.today() - timedelta(days=date.today().weekday())))
-    if st.button("Gerar pagamentos desta semana", type="primary", use_container_width=True):
-        # A funcao no banco ja bloqueia reabrir pagamentos PAGO.
-        qexec("call_gerar_pagamentos_semana", {"segunda": segunda})
-        st.success("Pagamentos gerados/atualizados.")
-        st.rerun()
+    segunda = st.date_input(
+        "Segunda-feira da semana",
+        value=(date.today() - timedelta(days=date.today().weekday())),
+        key="fin_segunda",
+    )
+
+    if st.button("Gerar pagamentos desta semana", type="primary", use_container_width=True, key="fin_btn_gerar"):
+        try:
+            exec_sql("select public.fn_gerar_pagamentos_semana(%s);", (segunda,))
+            st.success("Pagamentos gerados/atualizados (sem reabrir os que já estão PAGO).")
+            st.rerun()
+        except Exception as e:
+            st.error("Falha ao gerar pagamentos.")
+            st.exception(e)
 
     st.divider()
-    st.markdown("## 2) Pagamentos pendentes")
-    df = safe_df("q_pagamentos_pendentes")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # -------------------------
+    # 2) PAGAR (ABERTOS)
+    # -------------------------
+    st.markdown("## 2) Pagar (pendentes)")
+    data_pg = st.date_input("Data do pagamento", value=date.today(), key="fin_data_pg")
+
+    df_pend = safe_df(sql("q_pagamentos_pendentes"))
+    if df_pend.empty:
+        st.info("Nenhum pagamento pendente (ABERTO).")
+    else:
+        # visão por profissional (mais legível 60+)
+        profs = df_pend["profissional"].dropna().unique().tolist()
+
+        for nome in profs:
+            dfp = df_pend[df_pend["profissional"] == nome].copy()
+
+            total_prof = float(dfp["valor_total"].fillna(0).sum())
+            with st.expander(f"👤 {nome} — pendente: {brl(total_prof)}", expanded=False):
+                for _, r in dfp.iterrows():
+                    pid = int(r["id"])
+                    ref = ""
+                    if r["tipo"] in ("SEMANAL",):
+                        ref = f"{r['referencia_inicio']} → {r['referencia_fim']}"
+                    elif r["tipo"] == "EXTRA":
+                        ref = f"{r['referencia_inicio']}"
+                    else:
+                        ref = ""
+
+                    c1, c2, c3, c4 = st.columns([5, 2, 2, 2])
+                    with c1:
+                        st.write(f"**#{pid} • {r['tipo']}**  {ref}")
+                        if r.get("observacao"):
+                            st.caption(str(r["observacao"])[:160])
+                    with c2:
+                        st.write(brl(r["valor_total"]))
+                    with c3:
+                        # detalhes (itens)
+                        if st.button("Ver itens", key=f"fin_itens_{pid}", use_container_width=True):
+                            dfi = safe_df(sql("q_pagamento_itens"), {"pagamento_id": pid})
+                            if dfi.empty:
+                                st.info("Sem itens detalhados.")
+                            else:
+                                st.dataframe(dfi[["descricao", "valor"]], use_container_width=True, hide_index=True)
+                    with c4:
+                        if st.button("Marcar como PAGO", type="primary", key=f"fin_pagar_{pid}", use_container_width=True):
+                            try:
+                                qexec(
+                                    sql("call_marcar_pagamento_pago"),
+                                    {"pagamento_id": pid, "usuario": usuario, "data_pagamento": data_pg},
+                                )
+                                st.success(f"Pago: #{pid}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error("Falha ao marcar como pago.")
+                                st.exception(e)
+
+    st.divider()
+
+    # -------------------------
+    # 3) ESTORNAR (puxando do histórico 30d)
+    # -------------------------
+    st.markdown("## 3) Estornar (apenas pagos)")
+    st.caption("Use estorno para corrigir erro bancário/lançamento. Sempre informe o motivo.")
+
+    df_pago = safe_df(sql("q_pagamentos_pagos_30d"))
+
+    if df_pago.empty:
+        st.info("Nenhum pagamento PAGO nos últimos 30 dias.")
+    else:
+        # filtro simples
+        cF1, cF2 = st.columns([3, 2])
+        with cF1:
+            f_nome = st.text_input("Filtrar por profissional", value="", key="fin_filtro_nome")
+        with cF2:
+            f_tipo = st.selectbox("Tipo", ["(todos)", "SEMANAL", "EXTRA", "POR_FASE"], index=0, key="fin_filtro_tipo")
+
+        dfv = df_pago.copy()
+        if f_nome.strip():
+            t = f_nome.strip().lower()
+            dfv = dfv[dfv["profissional"].astype(str).str.lower().str.contains(t)]
+        if f_tipo != "(todos)":
+            dfv = dfv[dfv["tipo"] == f_tipo]
+
+        st.dataframe(
+            dfv[["id", "profissional", "tipo", "valor_total", "pago_em", "referencia_inicio", "referencia_fim"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.markdown("### Estornar um pagamento")
+        with st.form("fin_form_estorno", clear_on_submit=True):
+            ids = dfv["id"].astype(int).tolist()
+            if not ids:
+                st.info("Nada para estornar com esses filtros.")
+            else:
+                pid = st.selectbox("Pagamento (ID)", options=ids, key="fin_estorno_id")
+                motivo = st.text_input("Motivo do estorno", value="", placeholder="Ex: duplicidade / erro banco", key="fin_estorno_motivo")
+                b1, b2 = st.columns([2, 2])
+                with b1:
+                    ok = st.form_submit_button("Estornar", type="primary", use_container_width=True)
+                with b2:
+                    st.form_submit_button("Cancelar", use_container_width=True)
+
+                if ok:
+                    if not motivo.strip():
+                        st.warning("Informe o motivo do estorno.")
+                        st.stop()
+                    try:
+                        qexec(
+                            sql("call_estornar_pagamento"),
+                            {"pagamento_id": int(pid), "usuario": usuario, "motivo": motivo.strip()},
+                        )
+                        st.success(f"Estornado: #{int(pid)} (voltou para ABERTO)")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Falha ao estornar.")
+                        st.exception(e)
+
+    st.divider()
+
+    # -------------------------
+    # 4) HISTÓRICO (PAGOS 30D)
+    # -------------------------
+    st.markdown("## 4) Histórico (pagos últimos 30 dias)")
+    if df_pago.empty:
+        st.info("Sem histórico.")
+    else:
+        st.dataframe(
+            df_pago[["id", "profissional", "tipo", "valor_total", "pago_em", "referencia_inicio", "referencia_fim"]],
+            use_container_width=True,
+            hide_index=True,
+        )
 
 # =========================
 # CONFIG (ADMIN)
