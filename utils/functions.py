@@ -167,7 +167,6 @@ def require_login() -> dict:
     if st.session_state["auth"] is not None:
         return st.session_state["auth"]
 
-    st.title("SEPOL - Gestao de Obras")
     st.caption("Login")
 
     with st.form("login", clear_on_submit=False):
@@ -219,3 +218,4 @@ def apply_pending_nav(default: str = "HOME") -> str:
     if "_menu_target" in st.session_state and st.session_state["_menu_target"]:
         st.session_state["menu"] = st.session_state.pop("_menu_target")
     return st.session_state["menu"]
+
