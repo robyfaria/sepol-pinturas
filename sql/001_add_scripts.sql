@@ -1,4 +1,4 @@
--- 002_add_scripts.sql
+-- 001_add_scripts.sql
 -- Seed rapido (30s) para DEV
 -- Rode depois do 000_core.sql.
 -- IMPORTANTE: troque as senhas apos o primeiro login.
@@ -10,8 +10,8 @@ begin;
 -- =========================
 with novos(usuario, senha, perfil) as (
   values
-    ('admin',    'admin123',    'ADMIN'),
-    ('operacao', 'operacao123', 'OPERACAO')
+    ('admin',    'admin2026',    'ADMIN'),
+    ('operacao', 'operacao2026', 'OPERACAO')
 )
 insert into public.usuarios_app (usuario, senha_hash, perfil, ativo)
 select n.usuario, crypt(n.senha, gen_salt('bf')), n.perfil, true
@@ -22,10 +22,10 @@ on conflict (usuario) do nothing;
 -- Cadastros base
 -- =========================
 -- Clientes
-insert into public.clientes (nome, telefone, endereco, origem, ativo)
+insert into public.clientes (nome, telefone, endereco, ativo)
 values
-  ('Cliente Teste 01', '11999990001', 'Rua A, 100', 'PROPRIO', true),
-  ('Cliente Teste 02', '11999990002', 'Rua B, 200', 'PROPRIO', true)
+  ('Cliente Teste 01', '11999990001', 'Rua A, 100', true),
+  ('Cliente Teste 02', '11999990002', 'Rua B, 200', true)
 on conflict do nothing;
 
 -- Profissionais
@@ -44,10 +44,8 @@ declare
   v_obra_id bigint;
   v_orc_id bigint;
   v_f1 bigint;
-  v_f2 bigint;
   v_srv1 bigint;
   v_srv2 bigint;
-  v_srv3 bigint;
 begin
   select id into v_cliente_id from public.clientes order by id asc limit 1;
 
@@ -61,30 +59,25 @@ begin
 
   insert into public.obra_fases (obra_id, orcamento_id, nome_fase, ordem, status)
   values
-    (v_obra_id, v_orc_id, 'Preparacao e Aplicacao', 1, 'AGUARDANDO'),
-    (v_obra_id, v_orc_id, 'Acabamento Final',        2, 'AGUARDANDO')
+    (v_obra_id, v_orc_id, 'Preparacao e Aplicacao', 1, 'AGUARDANDO')
   returning id into v_f1;
 
   -- o returning acima pega so o primeiro id; buscar os dois
   select id into v_f1 from public.obra_fases where orcamento_id=v_orc_id and ordem=1;
-  select id into v_f2 from public.obra_fases where orcamento_id=v_orc_id and ordem=2;
 
   insert into public.servicos (nome, unidade, ativo)
   values
-    ('Pintura parede interna', 'M2', true),
-    ('Lixamento',             'M2', true),
-    ('Pintura teto',          'M2', true)
+    ('Pintura parede interna', 'M2', true)
+    ,('Lixamento',             'M2', true)
   on conflict (nome) do nothing;
 
   select id into v_srv1 from public.servicos where nome='Pintura parede interna';
   select id into v_srv2 from public.servicos where nome='Lixamento';
-  select id into v_srv3 from public.servicos where nome='Pintura teto';
 
   insert into public.orcamento_fase_servicos (orcamento_id, obra_fase_id, servico_id, quantidade, valor_unit, observacao)
   values
-    (v_orc_id, v_f1, v_srv2, 80,  6, null),
-    (v_orc_id, v_f1, v_srv1, 80, 18, null),
-    (v_orc_id, v_f2, v_srv3, 40, 20, null)
+    (v_orc_id, v_f1, v_srv2, 80,  6, null)
+    ,(v_orc_id, v_f1, v_srv1, 80, 18, null)
   on conflict do nothing;
 
   -- Recalcula totais (fases + orcamento)
@@ -103,7 +96,7 @@ begin
   from public.pessoas p
   where p.tipo in ('PINTOR','AJUDANTE')
   order by p.id
-  limit 2
+  limit 1
   on conflict (data, pessoa_id) do nothing;
 
   -- Apontamentos (hoje) - usa diaria_base dos profissionais
@@ -112,7 +105,7 @@ begin
   from public.pessoas p
   where p.tipo in ('PINTOR','AJUDANTE')
   order by p.id
-  limit 2
+  limit 1
   on conflict (obra_id, pessoa_id, data) do nothing;
 
 end $$;
