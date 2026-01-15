@@ -18,13 +18,52 @@ import os
 # st.set_page_config("DEV SEPOL - Controle de Obras", layout="wide")
 st.set_page_config(page_title="DEV SEPOL - Pinturas", layout="wide")
 
+if "modo_conforto" not in st.session_state:
+    st.session_state["modo_conforto"] = True
+
+def apply_accessibility_styles(enabled: bool):
+    if not enabled:
+        return
+    st.markdown(
+        """
+        <style>
+            html, body, [class*="css"]  {
+                font-size: 18px;
+            }
+            div.stButton > button {
+                font-size: 18px;
+                padding: 0.65rem 1rem;
+            }
+            div.stTextInput input, div.stNumberInput input {
+                font-size: 18px;
+            }
+            div[data-baseweb="select"] > div {
+                font-size: 18px;
+            }
+            section[data-testid="stSidebar"] div.stButton > button {
+                font-size: 18px;
+                padding: 0.7rem 1rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+apply_accessibility_styles(st.session_state["modo_conforto"])
+
 col_title, col_logo = st.columns([6,1])
 
 with col_title:
     st.markdown("## 🏗️ SEPOL - Controle de Obras")
 
 with col_logo:
-    st.image("assets/sepol_logo.png", use_container_width=True) # width=120)
+    logo_path = None
+    for candidate in ("assets/sepol_logo.png", "assets/logo.png"):
+        if os.path.exists(candidate):
+            logo_path = candidate
+            break
+    if logo_path:
+        st.image(logo_path, use_container_width=True) # width=120)
 
 # ======================================================
 # DB
@@ -115,6 +154,12 @@ def brl(v):
     except Exception:
         return "R$ 0,00"
 
+def get_logo_path():
+    for candidate in ("assets/sepol_logo.png", "assets/logo.png"):
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
 def monday(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
@@ -168,8 +213,8 @@ def gerar_pdf_orcamento(df_head, df_itens) -> bytes:
     w, h = A4
     
     # --- LOGO (topo direito) ---
-    logo_path = "assets/sepol_logo.png"
-    if os.path.exists(logo_path):
+    logo_path = get_logo_path()
+    if logo_path:
         try:
             logo = ImageReader(logo_path)
             logo_w = 110  # largura em pontos (ajuste fino)
@@ -293,9 +338,23 @@ with st.sidebar:
         st.session_state["menu"] = "HOJE"
     if "menu_widget" not in st.session_state:
         st.session_state["menu_widget"] = st.session_state["menu"]
+
+    modo_conforto = st.checkbox("Modo Conforto (60+)", value=st.session_state["modo_conforto"])
+    if modo_conforto != st.session_state["modo_conforto"]:
+        st.session_state["modo_conforto"] = modo_conforto
+        st.rerun()
+
+    st.markdown("### Atalhos rápidos")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.button("🏠 Hoje", on_click=go, args=("HOJE",), use_container_width=True)
+        st.button("🗓️ Apontamentos", on_click=go, args=("APONTAMENTOS",), use_container_width=True)
+    with col2:
+        st.button("🏗️ Obras", on_click=go, args=("OBRAS",), use_container_width=True)
+        st.button("💰 Financeiro", on_click=go, args=("FINANCEIRO",), use_container_width=True)
     
     # widget controla "menu_widget"
-    st.selectbox("Menu", MENU_OPTS, key="menu_widget")
+    st.selectbox("Ir para", MENU_OPTS, key="menu_widget")
     
     # sincroniza: se usuário mudou no widget → atualiza menu
     if st.session_state["menu_widget"] != st.session_state["menu"]:
