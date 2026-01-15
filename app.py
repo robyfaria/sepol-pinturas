@@ -15,8 +15,8 @@ import os
 # ======================================================
 # CONFIG
 # ======================================================
-# st.set_page_config("DEV SEPOL - Controle de Obras", layout="wide")
-st.set_page_config(page_title="DEV SEPOL - Pinturas", layout="wide")
+# st.set_page_config("SEPOL - Controle de Obras", layout="wide")
+st.set_page_config(page_title="SEPOL - Pinturas", layout="wide")
 
 col_title, col_logo = st.columns([6,1])
 
@@ -311,7 +311,7 @@ with st.sidebar:
         st.rerun()
 
 menu = st.session_state["menu"]
-# st.title("🏗️ SEPOL - DEV")
+# st.title("🏗️ SEPOL")
 
 # ======================================================
 # PROFISSIONAIS (estável: form + modo edição)
