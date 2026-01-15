@@ -47,7 +47,7 @@ menu = st.session_state["menu"]
 # =========================
 if menu == "HOME":
     st.title("🏠 Home")
-    st.caption("Visao rapida (60+)")
+    st.caption("Visao rapida")
 
     # KPIs (se as views existirem)
     try:
@@ -60,7 +60,7 @@ if menu == "HOME":
             c3.metric("Fases em andamento", int(r.get("fases_em_andamento", 0)))
             c4.metric("A receber", brl(r.get("recebimentos_pendentes_total", 0)))
     except Exception:
-        st.info("KPIs ainda nao configurados neste banco. (OK em DEV)")
+        st.info("KPIs ainda nao configurados neste banco.")
 
     st.divider()
     st.markdown("### Acoes rapidas")
@@ -244,15 +244,15 @@ if menu == "CADASTROS":
                         st.rerun()
 
 # =========================
-# OBRAS (placeholder para DEV refatorado)
+# OBRAS
 # =========================
 if menu == "OBRAS":
     st.title("🏗️ Obras")
-    st.caption("V1 em PROD; aqui estamos reorganizando em DEV.")
+    st.caption("Acompanhe as obras e detalhes principais.")
 
     df = safe_df("q_obras")
     if df.empty:
-        st.info("Cadastre uma obra em DEV (opcional) — ou rode o seed 002_add_scripts.sql")
+        st.info("Nenhuma obra cadastrada ainda.")
     else:
         obra_ids = df["id"].tolist()
         if "obra_sel" not in st.session_state or st.session_state["obra_sel"] not in obra_ids:
@@ -272,7 +272,7 @@ if menu == "OBRAS":
         c2.metric("Status", d.get("status", ""))
         c3.metric("Ativo", "SIM" if d.get("ativo") else "NAO")
 
-        st.info("Nesta fase do refactor: manteremos Obras/Orcamentos/Fases/Servicos no mesmo menu, com abas, como na V1 em PROD.")
+        st.info("Mais opcoes desta obra aparecem conforme os cadastros forem preenchidos.")
 
 # =========================
 # FINANCEIRO (ADMIN only)
@@ -304,4 +304,4 @@ if menu == "CONFIG" and perfil == "ADMIN":
     df = safe_df("q_auditoria_ultimos", {"limite": 200})
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    st.info("Gestao de usuarios (criar/resetar senha) ficara aqui no DEV refatorado. Na V1 em PROD voce ja tem o basico.")
+    st.info("Gestao de usuarios (criar/resetar senha) ficara disponivel aqui.")
