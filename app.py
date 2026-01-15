@@ -306,7 +306,7 @@ if menu == "CONFIG" and perfil == "ADMIN":
     
     # --------- Helpers UI ----------
     def refresh_users():
-        st.session_state["users_df"] = safe_df(sql("q_users"))
+        st.session_state["users_df"] = safe_df("q_users")
     
     if "users_df" not in st.session_state:
         refresh_users()
@@ -334,7 +334,7 @@ if menu == "CONFIG" and perfil == "ADMIN":
                 st.stop()
     
             try:
-                qexec(sql("i_user"), {
+                qexec("i_user", {
                     "usuario": new_usuario.strip().lower(),
                     "senha": new_senha.strip(),
                     "perfil": new_perfil,
@@ -385,7 +385,7 @@ if menu == "CONFIG" and perfil == "ADMIN":
         label = "Inativar" if u_ativo else "Ativar"
         if st.button(label, use_container_width=True):
             try:
-                qexec(sql("u_user_set_ativo"), {"id": sel_id, "ativo": (not u_ativo)})
+                qexec("u_user_set_ativo", {"id": sel_id, "ativo": (not u_ativo)})
                 st.success("Atualizado.")
                 refresh_users()
                 st.rerun()
@@ -428,7 +428,7 @@ if menu == "CONFIG" and perfil == "ADMIN":
                     st.stop()
     
                 try:
-                    qexec(sql("u_user_reset_senha"), {"id": st.session_state["reset_user_id"], "senha": nova1})
+                    qexec("u_user_reset_senha", {"id": st.session_state["reset_user_id"], "senha": nova1})
                     st.success("Senha atualizada.")
                     st.session_state["reset_open"] = False
                     refresh_users()
