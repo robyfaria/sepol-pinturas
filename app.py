@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+import uuid
 
 from utils.functions import (
     require_login,
@@ -811,6 +812,7 @@ if menu == "CONFIG" and perfil == "ADMIN":
     u_usuario = user_row["usuario"]
     u_perfil = user_row["perfil"]
     u_ativo = bool(user_row["ativo"])
+    u_auth_user_id = user_row.get("auth_user_id")
     
     cA, cB, cC, cD = st.columns([3, 2, 2, 3])
     with cA:
@@ -843,6 +845,30 @@ if menu == "CONFIG" and perfil == "ADMIN":
             st.session_state["reset_user_id"] = sel_id
             st.session_state["reset_user_nome"] = u_usuario
             st.session_state["reset_open"] = True
+
+    st.divider()
+
+    st.markdown("## 3) Vincular Supabase Auth")
+    st.caption("Informe o auth_user_id (UUID) do Supabase Auth para habilitar RLS.")
+    auth_user_id_input = st.text_input(
+        "auth_user_id",
+        value=str(u_auth_user_id) if u_auth_user_id else "",
+        placeholder="ex: 00000000-0000-0000-0000-000000000000",
+    )
+    if st.button("Salvar vinculo", use_container_width=True):
+        try:
+            auth_user_id_val = auth_user_id_input.strip() or None
+            if auth_user_id_val is not None:
+                auth_user_id_val = str(uuid.UUID(auth_user_id_val))
+            qexec("u_user_set_auth", {"id": sel_id, "auth_user_id": auth_user_id_val})
+            st.success("Vínculo atualizado.")
+            refresh_users()
+            st.rerun()
+        except ValueError:
+            st.warning("auth_user_id inválido. Use um UUID válido.")
+        except Exception as e:
+            st.error("Falha ao atualizar auth_user_id.")
+            st.exception(e)
     
     # Modal simples (sem st.dialog, para compatibilidade)
     if st.session_state.get("reset_open"):
@@ -884,9 +910,9 @@ if menu == "CONFIG" and perfil == "ADMIN":
     st.divider()
     
     # tabela 60+ (visível)
-    st.markdown("## 3) Visão geral")
+    st.markdown("## 4) Visão geral")
     st.dataframe(
-        df_users[["usuario", "perfil", "ativo", "criado_em"]],
+        df_users[["usuario", "perfil", "ativo", "auth_user_id", "criado_em"]],
         use_container_width=True,
         hide_index=True
     )

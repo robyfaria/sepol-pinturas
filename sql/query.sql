@@ -5,11 +5,9 @@
 -- LOGIN / CONFIG
 -- =========================
 
--- name: q_login_user
-select id, usuario, senha_hash, perfil, ativo
-from public.usuarios_app
-where usuario = %(usuario)s
-limit 1;
+-- name: q_login
+select ok, perfil, msg, usuario_id, auth_user_id
+from public.fn_login(%(usuario)s, %(senha)s);
 
 -- name: q_auditoria_ultimos
 select id, usuario, entidade, entidade_id, acao, criado_em
@@ -18,7 +16,7 @@ order by criado_em desc
 limit %(limite)s;
 
 -- name: q_users
-select id, usuario, perfil, ativo, criado_em
+select id, usuario, perfil, ativo, auth_user_id, criado_em
 from public.usuarios_app
 order by usuario;
 
@@ -34,6 +32,11 @@ where id = %(id)s;
 -- name: u_user_set_ativo
 update public.usuarios_app
 set ativo = %(ativo)s
+where id = %(id)s;
+
+-- name: u_user_set_auth
+update public.usuarios_app
+set auth_user_id = %(auth_user_id)s
 where id = %(id)s;
 
 -- =========================

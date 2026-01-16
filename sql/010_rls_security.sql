@@ -38,6 +38,10 @@ as $$
   select coalesce(public.fn_user_perfil() = 'ADMIN', false)
 $$;
 
+alter function public.fn_user_perfil() set search_path = public;
+alter function public.fn_user_is_admin() set search_path = public;
+alter function public.fn_login(text, text) set search_path = public;
+
 
 -- ======================================================
 -- 3) HABILITAR RLS NAS TABELAS PRINCIPAIS

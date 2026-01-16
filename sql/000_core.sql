@@ -84,33 +84,36 @@ $$;
 
 -- valida login e devolve perfil (ou null)
 create or replace function public.fn_login(p_usuario text, p_senha text)
-returns table(ok boolean, perfil text, msg text)
+returns table(ok boolean, perfil text, msg text, usuario_id bigint, auth_user_id uuid)
 language plpgsql
+security definer
 as $$
 declare
   v_hash text;
   v_perfil text;
   v_ativo boolean;
+  v_usuario_id bigint;
+  v_auth_user_id uuid;
 begin
-  select senha_hash, perfil, ativo
-    into v_hash, v_perfil, v_ativo
+  select id, senha_hash, perfil, ativo, auth_user_id
+    into v_usuario_id, v_hash, v_perfil, v_ativo, v_auth_user_id
   from public.usuarios_app
   where usuario = p_usuario;
 
   if v_hash is null then
-    return query select false, null::text, 'Usuário não encontrado';
+    return query select false, null::text, 'Usuário não encontrado', null::bigint, null::uuid;
     return;
   end if;
 
   if not v_ativo then
-    return query select false, null::text, 'Usuário inativo';
+    return query select false, null::text, 'Usuário inativo', v_usuario_id, v_auth_user_id;
     return;
   end if;
 
   if crypt(p_senha, v_hash) <> v_hash then
     insert into public.auditoria(usuario, perfil, ip, entidade, entidade_id, acao, antes_json, depois_json)
     values (p_usuario, null, public.fn_ctx_get('app.ip'), 'usuarios_app', null, 'LOGIN_FALHA', null, jsonb_build_object('motivo','senha_incorreta'));
-    return query select false, null::text, 'Senha inválida';
+    return query select false, null::text, 'Senha inválida', v_usuario_id, v_auth_user_id;
     return;
   end if;
 
@@ -119,7 +122,7 @@ begin
   insert into public.auditoria(usuario, perfil, ip, entidade, entidade_id, acao, antes_json, depois_json)
   values (p_usuario, v_perfil, public.fn_ctx_get('app.ip'), 'usuarios_app', null, 'LOGIN_OK', null, jsonb_build_object('usuario',p_usuario,'perfil',v_perfil));
 
-  return query select true, v_perfil, 'OK';
+  return query select true, v_perfil, 'OK', v_usuario_id, v_auth_user_id;
 end;
 $$;
 
@@ -757,7 +760,8 @@ for each row execute function public.fn_audit_trigger();
 -- =========================================================
 -- VIEWS (base para HOME / FINANCEIRO / OBRAS)
 -- =========================================================
-create or replace view public.pagamentos_pendentes as
+create or replace view public.pagamentos_pendentes
+security_invoker as
 select p.id, pe.nome pessoa_nome, pe.tipo pessoa_tipo, p.tipo, p.status, p.valor_total,
        p.referencia_inicio, p.referencia_fim, p.pago_em, p.criado_em
 from public.pagamentos p
@@ -765,14 +769,16 @@ join public.pessoas pe on pe.id=p.pessoa_id
 where p.status='ABERTO'
 order by pe.nome, p.tipo, p.referencia_inicio nulls last;
 
-create or replace view public.pagamentos_extras_pendentes as
+create or replace view public.pagamentos_extras_pendentes
+security_invoker as
 select p.id, pe.nome pessoa_nome, p.valor_total, p.referencia_inicio as data_extra, p.criado_em
 from public.pagamentos p
 join public.pessoas pe on pe.id=p.pessoa_id
 where p.status='ABERTO' and p.tipo='EXTRA'
 order by p.referencia_inicio, pe.nome;
 
-create or replace view public.pagamentos_pagos_30d as
+create or replace view public.pagamentos_pagos_30d
+security_invoker as
 select p.id, pe.nome pessoa_nome, p.tipo, p.valor_total, p.pago_em, p.referencia_inicio, p.referencia_fim
 from public.pagamentos p
 join public.pessoas pe on pe.id=p.pessoa_id
@@ -780,7 +786,8 @@ where p.status='PAGO'
   and p.pago_em >= (current_date - 30)
 order by p.pago_em desc, p.id desc;
 
-create or replace view public.alocacoes_hoje as
+create or replace view public.alocacoes_hoje
+security_invoker as
 select a.data, p.nome profissional, o.titulo obra, a.tipo, a.observacao
 from public.alocacoes a
 join public.pessoas p on p.id=a.pessoa_id
@@ -788,7 +795,8 @@ join public.obras o on o.id=a.obra_id
 where a.data=current_date
 order by profissional;
 
-create or replace view public.servicos_por_fase as
+create or replace view public.servicos_por_fase
+security_invoker as
 select
   ofs.id,
   ofs.orcamento_id,
@@ -806,7 +814,8 @@ join public.obra_fases f on f.id=ofs.obra_fase_id
 join public.servicos s on s.id=ofs.servico_id
 order by ofs.orcamento_id desc, f.ordem asc, s.nome asc;
 
-create or replace view public.pagamentos_para_sexta as
+create or replace view public.pagamentos_para_sexta
+security_invoker as
 with params as (
   select (current_date + ((5 - extract(dow from current_date)::int + 7) % 7))::date as sexta_alvo
 )
@@ -831,7 +840,8 @@ where p.status = 'ABERTO'
   )
 order by pe.nome, p.tipo, p.id;
 
-create or replace view public.home_hoje_kpis as
+create or replace view public.home_hoje_kpis
+security_invoker as
 with params as (
   select
     current_date as hoje,
