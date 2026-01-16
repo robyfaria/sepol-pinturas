@@ -39,7 +39,7 @@ with st.sidebar:
     if perfil == "ADMIN":
         opcoes += ["FINANCEIRO", "CONFIG"]
 
-    st.selectbox("Menu", opcoes, key="menu")
+    st.radio("Menu", opcoes, key="menu")
 
     if st.button("Sair", use_container_width=True):
         logout()
