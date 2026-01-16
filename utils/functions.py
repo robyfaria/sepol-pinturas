@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -72,10 +73,29 @@ def _ensure_conn() -> psycopg2.extensions.connection:
         return get_conn()
 
 
+def _apply_session_settings(cur: psycopg2.extensions.cursor) -> None:
+    auth = st.session_state.get("auth") if "auth" in st.session_state else None
+    if auth and auth.get("auth_user_id"):
+        claims = json.dumps({"sub": str(auth["auth_user_id"]), "role": "authenticated"})
+        role = "authenticated"
+        usuario = auth.get("usuario", "")
+        perfil = auth.get("perfil", "")
+    else:
+        claims = json.dumps({"role": "anon"})
+        role = "anon"
+        usuario = ""
+        perfil = ""
+    cur.execute("select set_config('request.jwt.claims', %s, true);", (claims,))
+    cur.execute("select set_config('role', %s, true);", (role,))
+    cur.execute("select set_config('app.usuario', %s, true);", (usuario,))
+    cur.execute("select set_config('app.perfil', %s, true);", (perfil,))
+
+
 def query_df(sql: str, params: Optional[dict | tuple] = None) -> pd.DataFrame:
     conn = _ensure_conn()
     try:
         with conn.cursor() as cur:
+            _apply_session_settings(cur)
             cur.execute(sql, params or {})
             rows = cur.fetchall()
         return pd.DataFrame(rows)
@@ -91,6 +111,7 @@ def exec_sql(sql: str, params: Optional[dict | tuple] = None) -> None:
     conn = _ensure_conn()
     try:
         with conn.cursor() as cur:
+            _apply_session_settings(cur)
             cur.execute(sql, params or {})
         conn.commit()
     except Exception:
@@ -130,26 +151,22 @@ def safe_df(name: str, params: Optional[dict] = None, msg: str = "Falha ao consu
 
 
 def check_password(usuario: str, senha: str) -> Tuple[bool, Optional[dict]]:
-    """Valida senha usando pgcrypto (crypt).
+    """Valida senha usando fn_login.
 
     Retorna (ok, user_row_dict).
     """
-    df = qdf("q_login_user", {"usuario": usuario})
+    df = qdf("q_login", {"usuario": usuario, "senha": senha})
     if df.empty:
         return False, None
-    u = dict(df.iloc[0])
-    if not u.get("ativo"):
+    row = dict(df.iloc[0])
+    if not row.get("ok"):
         return False, None
-
-    # valida no banco pra nao reimplementar crypt
-    conn = _ensure_conn()
-    with conn.cursor() as cur:
-        cur.execute(
-            "select (crypt(%s, %s) = %s) as ok;",
-            (senha, u["senha_hash"], u["senha_hash"]),
-        )
-        ok = bool(cur.fetchone()["ok"])
-    return ok, u if ok else None
+    return True, {
+        "id": row.get("usuario_id"),
+        "usuario": usuario,
+        "perfil": row.get("perfil"),
+        "auth_user_id": row.get("auth_user_id"),
+    }
 
 
 def hash_password(senha: str) -> str:
@@ -178,10 +195,14 @@ def require_login() -> dict:
             if not ok:
                 st.error("Usuario ou senha invalidos.")
                 st.stop()
+            if not u.get("auth_user_id"):
+                st.error("Usuário sem vinculo ao Supabase Auth. Atualize o auth_user_id no cadastro.")
+                st.stop()
             st.session_state["auth"] = {
                 "id": u["id"],
                 "usuario": u["usuario"],
                 "perfil": u["perfil"],
+                "auth_user_id": u.get("auth_user_id"),
             }
             st.rerun()
 
