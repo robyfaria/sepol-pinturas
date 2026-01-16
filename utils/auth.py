@@ -1,7 +1,7 @@
 # utils/auth.py
 import streamlit as st
 from supabase_auth.errors import AuthApiError
-from utils.db import rpc, sb_anon, sb  # <-- importante
+from utils.db import rpc, sb_anon # <-- importante
 
 def is_logged_in() -> bool:
     return "sb_session" in st.session_state and bool(st.session_state["sb_session"].get("access_token"))
