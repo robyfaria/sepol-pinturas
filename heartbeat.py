@@ -15,7 +15,7 @@ def main():
     supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
     # Query extremamente leve
-    resp = supabase.table("empresas").select("id").limit(1).execute()
+    resp = supabase.table("clientes").select("id").limit(1).execute()
 
     if getattr(resp, "error", None):
         print("❌ Erro no heartbeat:", resp.error)
