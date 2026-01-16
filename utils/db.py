@@ -1,19 +1,37 @@
+# utils/db.py
 import streamlit as st
 from supabase import create_client
 
+def sb_anon():
+    """
+    Cliente ANON (não logado).
+    Use para login e leitura pública (quando permitido).
+    """
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_ANON_KEY"],
+    )
+
 def sb_admin():
     """
-    Client 'anon' (não logado) – útil só para login.
-    Para operações com RLS, use sb().
+    Cliente SERVICE ROLE (admin).
+    Use SOMENTE no backend/admin: criar usuário, resetar senha, etc.
+    NUNCA use para login do usuário final.
     """
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_ANON_KEY"])
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_SERVICE_ROLE_KEY"],
+    )
 
 def sb():
     """
-    Client autenticado (com sessão do usuário) – RLS funciona aqui.
+    Cliente autenticado (com sessão do usuário) – RLS funciona aqui.
     Requer st.session_state["sb_session"] com access_token/refresh_token.
     """
-    client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_ANON_KEY"])
+    client = create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_ANON_KEY"],
+    )
 
     sess = st.session_state.get("sb_session")
     if not sess:
@@ -22,8 +40,9 @@ def sb():
     access_token = sess.get("access_token")
     refresh_token = sess.get("refresh_token")
 
-    # supabase-py v2: set_session(access, refresh)
-    client.auth.set_session(access_token, refresh_token)
+    if access_token and refresh_token:
+        client.auth.set_session(access_token, refresh_token)
+
     return client
 
 def rpc(fn_name: str, params: dict | None = None):
