@@ -129,43 +129,6 @@ if menu == "HOME":
         st.markdown("### 🔜 Atalho")
         st.write("Para pagar, vá em **FINANCEIRO → Pagar (pendentes)**.")
 
-
-# =========================
-# HOME
-# =========================
-# if menu == "HOME":
-#     st.title("🏠 Home")
-#     st.caption("Visao rapida")
-
-#     # KPIs (se as views existirem)
-#     try:
-#         kpi = safe_df("q_home_kpis")
-#         r = kpi.iloc[0] if not kpi.empty else None
-#         if r is not None:
-#             c1, c2, c3, c4 = st.columns(4)
-#             c1.metric("Hoje", str(r.get("hoje")))
-#             c2.metric("Sexta", str(r.get("sexta")))
-#             c3.metric("Fases em andamento", int(r.get("fases_em_andamento", 0)))
-#             c4.metric("A receber", brl(r.get("recebimentos_pendentes_total", 0)))
-#     except Exception:
-#         st.info("KPIs ainda nao configurados neste banco.")
-
-#     st.divider()
-#     st.markdown("### Ações rápidas")
-#     cA, cB, cC = st.columns(3)
-#     with cA:
-#         if st.button("Apontamentos", type="primary", use_container_width=True):
-#             goto("OBRAS")
-#             st.rerun()
-#     with cB:
-#         if perfil == "ADMIN" and st.button("Financeiro", use_container_width=True):
-#             goto("FINANCEIRO")
-#             st.rerun()
-#     with cC:
-#         if st.button("Cadastros", use_container_width=True):
-#             goto("CADASTROS")
-#             st.rerun()
-
 # =========================
 # CADASTROS (clientes + profissionais numa tela)
 # =========================
