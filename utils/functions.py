@@ -149,13 +149,12 @@ def safe_df(name: str, params: Optional[dict] = None, msg: str = "Falha ao consu
 # Auth
 # ======================================================
 
-
 def check_password(usuario: str, senha: str) -> Tuple[bool, Optional[dict]]:
     """Valida senha usando pgcrypto (crypt).
 
     Retorna (ok, user_row_dict).
     """
-    df = qdf("q_login_user", {"usuario": usuario})
+    df = qdf("q_login_user", {"usuario": usuario, "senha": senha})
     if df.empty:
         return False, None
     u = dict(df.iloc[0])
@@ -244,5 +243,6 @@ def apply_pending_nav(default: str = "HOME") -> str:
     if "_menu_target" in st.session_state and st.session_state["_menu_target"]:
         st.session_state["menu"] = st.session_state.pop("_menu_target")
     return st.session_state["menu"]
+
 
 
