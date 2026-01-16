@@ -1,0 +1,29 @@
+name: Supabase Heartbeat (Python)
+
+on:
+  schedule:
+    - cron: "0 */6 * * 1,4"   # as 6 horas de segundas e quintas
+  workflow_dispatch:
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install supabase
+
+      - name: Run heartbeat
+        run: python heartbeat.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
