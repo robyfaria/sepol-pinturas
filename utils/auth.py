@@ -1,5 +1,7 @@
+# utils/auth.py
 import streamlit as st
-from utils.db import sb_admin, rpc
+from supabase_auth.errors import AuthApiError
+from utils.db import rpc, sb_anon, sb  # <-- importante
 
 def is_logged_in() -> bool:
     return "sb_session" in st.session_state and bool(st.session_state["sb_session"].get("access_token"))
@@ -65,30 +67,52 @@ def login_ui(logo_path: str | None = None):
         st.button("Limpar", use_container_width=True, on_click=_clear_login_fields)
 
     if entrar:
-        if not email.strip() or not senha.strip():
-            st.warning("Informe email e senha.")
-            st.stop()
+        email = (email or "").strip()
+        senha = (senha or "")
+
+        # ✅ validações locais (evita exception desnecessária)
+        if "@" not in email or "." not in email:
+            st.error("Informe um e-mail válido.")
+            return
+        if not senha.strip():
+            st.error("Informe a senha.")
+            return
 
         try:
-            res = sb().auth.sign_in_with_password({"email": email.strip(), "password": senha})
+            # ✅ login deve usar ANON
+            res = sb_anon().auth.sign_in_with_password({"email": email, "password": senha})
             sess = res.session
+            if not sess:
+                st.error("Falha no login: sessão não retornada.")
+                return
 
             st.session_state["sb_session"] = {
                 "access_token": sess.access_token,
                 "refresh_token": sess.refresh_token,
             }
-            st.session_state["usuario_email"] = email.strip()
+            st.session_state["usuario_email"] = email
             st.session_state["usuario_id"] = res.user.id
 
-            # carrega perfil
+            # carrega perfil (seu método)
             load_profile()
 
             st.success("Login realizado.")
             st.rerun()
 
-        except Exception as e:
-            st.error("Login inválido ou usuário não confirmado.")
-            st.exception(e)
+        except AuthApiError as e:
+            msg = str(e).lower()
+            # ✅ mensagens mais úteis e sem stack trace gigante
+            if "email not confirmed" in msg or "not confirmed" in msg or "confirm" in msg:
+                st.error("Usuário não confirmado. Confirme o e-mail no Supabase Auth ou desative confirmação no DEV.")
+            else:
+                st.error("E-mail ou senha inválidos.")
+            return
+
+        except Exception:
+            st.error("Falha no login (erro inesperado).")
+            # se quiser logar no console sem poluir UI:
+            # import traceback; print(traceback.format_exc())
+            return
 
 def _clear_login_fields():
     for k in ["login_email", "login_senha"]:
