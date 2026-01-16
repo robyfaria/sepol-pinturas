@@ -9,6 +9,10 @@
 select ok, perfil, msg, usuario_id, auth_user_id
 from public.fn_login(%(usuario)s, %(senha)s);
 
+-- name: q_login_user
+select ok, perfil, msg, usuario_id, auth_user_id
+from public.fn_login(%(usuario)s, %(senha)s);
+
 -- name: q_auditoria_ultimos
 select id, usuario, entidade, entidade_id, acao, criado_em
 from public.auditoria
@@ -127,5 +131,6 @@ select public.fn_marcar_pagamento_pago(%(pagamento_id)s, %(usuario)s, %(data_pg)
 
 -- name: call_estornar_pagamento
 select public.fn_estornar_pagamento(%(pagamento_id)s, %(usuario)s, %(motivo)s);
+
 
 
