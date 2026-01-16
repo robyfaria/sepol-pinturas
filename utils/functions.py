@@ -151,22 +151,27 @@ def safe_df(name: str, params: Optional[dict] = None, msg: str = "Falha ao consu
 
 
 def check_password(usuario: str, senha: str) -> Tuple[bool, Optional[dict]]:
-    """Valida senha usando fn_login.
+    """Valida senha usando pgcrypto (crypt).
 
     Retorna (ok, user_row_dict).
     """
-    df = qdf("q_login", {"usuario": usuario, "senha": senha})
+    df = qdf("q_login_user", {"usuario": usuario})
     if df.empty:
         return False, None
-    row = dict(df.iloc[0])
-    if not row.get("ok"):
+    u = dict(df.iloc[0])
+    if not u.get("ativo"):
         return False, None
-    return True, {
-        "id": row.get("usuario_id"),
-        "usuario": usuario,
-        "perfil": row.get("perfil"),
-        "auth_user_id": row.get("auth_user_id"),
-    }
+
+    conn = _ensure_conn()
+    with conn.cursor() as cur:
+        cur.execute(
+            "select (crypt(%s, %s) = %s) as ok;",
+            (senha, u["senha_hash"], u["senha_hash"]),
+        )
+        ok = bool(cur.fetchone()["ok"])
+    if not ok:
+        return False, None
+    return True, u
 
 
 def hash_password(senha: str) -> str:
@@ -239,4 +244,5 @@ def apply_pending_nav(default: str = "HOME") -> str:
     if "_menu_target" in st.session_state and st.session_state["_menu_target"]:
         st.session_state["menu"] = st.session_state.pop("_menu_target")
     return st.session_state["menu"]
+
 
