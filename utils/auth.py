@@ -70,7 +70,7 @@ def login_ui(logo_path: str | None = None):
             st.stop()
 
         try:
-            res = sb_admin().auth.sign_in_with_password({"email": email.strip(), "password": senha})
+            res = sb().auth.sign_in_with_password({"email": email.strip(), "password": senha})
             sess = res.session
 
             st.session_state["sb_session"] = {
